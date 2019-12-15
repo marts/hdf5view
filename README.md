@@ -51,7 +51,7 @@ pip install -e .
 
 ## Chosing Qt API bindings
 
-`qtpy` has been as an abstraction layer for PyQt5/PySide2. Currently, the default is to use PyQt5. This is because the version of pyqtgraph (0.10.0) I have wouldn't work with PySide2.
+`qtpy` is used as an abstraction layer for PyQt5/PySide2. Currently, the default is to use PyQt5. This is because the version of pyqtgraph (0.10.0) I have wouldn't work with PySide2.
 
 Environment variables are used to set the Qt API. PyQt5 is used by default unless you set the `QT_API` environment variable. To switch to using PySide2:
 

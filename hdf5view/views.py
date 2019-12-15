@@ -91,7 +91,7 @@ class HDF5Widget(QWidget):
         # Update the table views when a tree node is selected
         self.tree_view.selectionModel().selectionChanged.connect(self.handle_selection_changed)
 
-        # Dynamicly populate more of the tree items when
+        # Dynamically populate more of the tree items when
         # selected to keep memory usage at a minimum.
         self.tree_view.expanded.connect(self.tree_model.handle_expanded)
         self.tree_view.collapsed.connect(self.tree_model.handle_collapsed)

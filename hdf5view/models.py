@@ -30,7 +30,7 @@ class TreeModel(QStandardItemModel):
         self.setColumnCount(3)
         self.setHorizontalHeaderLabels(['Objects', 'Attrs', 'Dataset'])
 
-        # Add the root node a immediate children
+        # Add the root node and immediate children
         root = self.add_node(self, self.hdf)
         for name, node in self.hdf.items():
             self.add_node(root, node)
