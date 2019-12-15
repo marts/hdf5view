@@ -42,6 +42,7 @@ class HDF5Widget(QWidget):
         # Set up the main file tree view
         self.tree_view = QTreeView(headerHidden=False)
         self.tree_view.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tree_view.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tree_view.setModel(self.tree_model)
 
         self.tree_view.header().setSectionResizeMode(0, QHeaderView.Interactive)
