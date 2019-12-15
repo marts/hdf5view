@@ -1,0 +1,11 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource>
+
+    <!-- Resources -->
+    <file>images/dataset.svg</file>
+    <file>images/folder.svg</file>
+    <file>images/folder-open.svg</file>
+    <file>images/hdf5view.svg</file>
+
+</qresource>
+</RCC>

@@ -6,7 +6,13 @@ I hope to add pyqtgraph plotting and some image rendering soon.
 
 ## Installing
 
-To install system wide use, download or clone the repo. Uncomment the preferred Qt bindings in setup.py (or install system packages...see below):
+On linux (Ubuntu/Debian) I generally prefer installing the system packages of PyQt5 and/or PySide2 - in that case don't bother with uncommenting stuff in install_requires in setup.py:
+
+```
+sudo apt install python3-pyqt5 python3-h5py python3-qtpy
+```
+
+To install system wide, download or clone the repo. Uncomment the preferred Qt bindings in setup.py (or install system packages...see below):
 
 ```
 cd hdf5view
@@ -17,12 +23,6 @@ To uninstall:
 
 ```
 sudo pip3 uninstall hdf5view
-```
-
-On linux (Ubuntu/Debian) I generally prefer installing the system packages of PyQt5 and/or PySide2:
-
-```
-sudo apt install python3-pyqt5 python3-h5py python3-qtpy
 ```
 
 ## Running
