@@ -4,9 +4,17 @@ from qtpy.QtCore import (
     Qt,
 )
 
+from qtpy.QtGui import (
+    QKeySequence,
+)
+
 from qtpy.QtWidgets import (
     QAbstractItemView,
+    QAction,
     QHeaderView,
+    QLabel,
+    QMainWindow,
+    QScrollBar,
     QTableView,
     QTreeView,
     QVBoxLayout,
@@ -21,6 +29,8 @@ from .models import (
     TreeModel,
 )
 
+import pyqtgraph as pg
+
 
 class HDF5Widget(QWidget):
     """
@@ -31,6 +41,8 @@ class HDF5Widget(QWidget):
         super().__init__()
 
         self.hdf = hdf
+
+        self.image_views = []
 
         # Initialise the models
         self.tree_model = TreeModel(self.hdf)
@@ -104,6 +116,8 @@ class HDF5Widget(QWidget):
         """
         Close the hdf5 file and clean up
         """
+        for view in self.image_views:
+            view.close()
         self.hdf.close()
 
     #
@@ -138,3 +152,169 @@ class HDF5Widget(QWidget):
 
         self.data_model.update_node(path)
         self.data_view.scrollToTop()
+
+    def add_image(self):
+        """
+        Add an image from the hdf5 file.
+        """
+        index = self.tree_view.selectedIndexes()[0]
+        path = self.tree_model.itemFromIndex(index).data(Qt.UserRole)
+        title = '{} - {}'.format(self.hdf.filename, path)
+
+        data = self.hdf[path]
+
+        image_view = ImageWindow(title, data)
+        self.image_views.append(image_view)
+        image_view.show()
+
+
+class ImageWindow(QMainWindow):
+
+    def __init__(self, title, data):
+        super().__init__()
+
+        self.data = data
+
+        self.setWindowTitle(title)
+
+        self.init_actions()
+        self.init_menus()
+        self.init_toolbars()
+        self.init_central_widget()
+        self.init_statusbar()
+
+    def init_actions(self):
+        """
+        Initialise actions
+        """
+        self.close_action = QAction(
+            '&Close',
+            self,
+            shortcut=QKeySequence.Close,
+            statusTip='Close image',
+            triggered=self.close,
+        )
+
+    def init_menus(self):
+        """
+        Initialise menus
+        """
+        menu = self.menuBar()
+
+        # Image menu
+        self.file_menu = menu.addMenu('&Image')
+        self.file_menu.addAction(self.close_action)
+
+    def init_toolbars(self):
+        """
+        Initialise the toobars
+        """
+        self.file_toolbar = self.addToolBar('Image')
+        self.file_toolbar.setObjectName('image_toolbar')
+        self.file_toolbar.addAction(self.close_action)
+
+    def init_central_widget(self):
+        """
+        Initialise the central widget
+        """
+        self.image_view = ImageView(self.data)
+        self.setCentralWidget(self.image_view)
+
+    def init_statusbar(self):
+        """
+        Initialise statusbar        """
+
+        self.status = self.statusBar()
+        self.status.addPermanentWidget(self.image_view.position_label)
+        self.status.addPermanentWidget(self.image_view.frame_label)
+
+
+class ImageView(QWidget):
+    """
+    Very rough image view, work in progress.
+
+    TODO: Axis selection
+          Min/Max scaling
+          Histogram
+          Colour maps
+    """
+
+    def __init__(self, data):
+        super().__init__()
+
+        self.data = data
+
+        # Statusbar widgets
+        self.position_label = QLabel()
+        self.frame_label = QLabel()
+
+        # Main graphics layout widget
+        graphics_layout_widget = pg.GraphicsLayoutWidget()
+
+        # Graphics layout widget view box
+        self.viewbox = graphics_layout_widget.addViewBox()
+        self.viewbox.setAspectLocked(True)
+
+        # Add image item to view box
+        self.image_item = pg.ImageItem(border='w')
+        self.viewbox.addItem(self.image_item)
+
+        # Create a scrollbar for moving through image frames
+        self.scrollbar = QScrollBar(Qt.Horizontal)
+
+        if data.ndim == 3:
+            # TODO: Set image range based on max/min?
+            self.image_item.setImage(data[0])
+            self.scrollbar.setRange(0, data.shape[0] - 1)
+            self.scrollbar.valueChanged.connect(self.handle_scroll)
+        elif data.ndim == 2:
+            self.image_item.setImage(data[:], autoLevels=True)
+            self.image_item.setBorder(None)
+            self.scrollbar.setRange(0, 0)
+            self.scrollbar.hide()
+        else:
+            pass
+        # TODO: Handle the wrong sized data
+
+        self.handle_scroll(0)
+
+        layout = QVBoxLayout()
+
+        layout.addWidget(graphics_layout_widget)
+        layout.addWidget(self.scrollbar)
+
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.setLayout(layout)
+
+        self.init_signals()
+
+    def init_signals(self):
+        self.image_item.scene().sigMouseMoved.connect(self.handle_mouse_moved)
+
+    def handle_scroll(self, value):
+        """
+        Change the image frame on scroll
+        """
+        self.image_item.setImage(self.data[value])
+        self.frame_label.setText('Frame={}'.format(value))
+
+    def handle_mouse_moved(self, pos):
+        """
+        Update the cursor position when the mouse moves
+        in the image scene.
+        """
+        max_x, max_y = self.image_item.image.shape
+
+        scene_pos = self.viewbox.mapSceneToView(pos)
+
+        x = int(scene_pos.x())
+        y = int(scene_pos.y())
+
+        if x >= 0 and x < max_x and y >= 0 and max_y:
+            self.position_label.setText('X={} Y={}'.format(x, y))
+            self.viewbox.setCursor(Qt.CrossCursor)
+        else:
+            self.position_label.setText('')
+            self.viewbox.setCursor(Qt.ArrowCursor)

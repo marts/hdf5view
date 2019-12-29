@@ -7,5 +7,8 @@
     <file>images/folder-open.svg</file>
     <file>images/hdf5view.svg</file>
 
+    <file>images/image.svg</file>
+    <file>images/plot.svg</file>
+
 </qresource>
 </RCC>

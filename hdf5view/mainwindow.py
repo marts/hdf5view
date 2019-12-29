@@ -10,6 +10,7 @@ from qtpy.QtCore import (
 )
 
 from qtpy.QtGui import (
+    QIcon,
     QKeySequence,
 )
 
@@ -43,6 +44,7 @@ class MainWindow(QMainWindow):
 
         self.init_actions()
         self.init_menus()
+        self.init_toolbars()
         self.init_statusbar()
         self.init_dock_widgets()
         self.init_central_widget()
@@ -55,6 +57,7 @@ class MainWindow(QMainWindow):
         Initialise actions
         """
         self.open_action = QAction(
+            QIcon(':/images/folder-open.svg'),
             '&Open...',
             self,
             shortcut=QKeySequence.Open,
@@ -111,6 +114,27 @@ class MainWindow(QMainWindow):
             triggered=self.handle_open_about,
         )
 
+        #
+        # Plot/image actions
+        #
+
+        self.add_image_action = QAction(
+            QIcon(':/images/image.svg'),
+            'Add &Image',
+            self,
+            statusTip='Add image',
+            triggered=self.handle_add_image,
+        )
+
+        self.add_plot_action = QAction(
+            QIcon(':/images/plot.svg'),
+            'Add &Plot',
+            self,
+            statusTip='Add plot',
+            triggered=self.handle_add_plot,
+        )
+        self.add_plot_action.setEnabled(False)
+
     def init_menus(self):
         """
         Initialise menus
@@ -144,6 +168,21 @@ class MainWindow(QMainWindow):
         # Help menu
         self.help_menu = menu.addMenu('&Help')
         self.help_menu.addAction(self.about_action)
+
+    def init_toolbars(self):
+        """
+        Initialise the toobars
+        """
+        self.file_toolbar = self.addToolBar('File')
+        self.file_toolbar.setObjectName('file_toolbar')
+        self.file_toolbar.addAction(self.open_action)
+
+        self.plots_toolbar = self.addToolBar('Plots')
+        self.plots_toolbar.setObjectName('plots_toolbar')
+        self.plots_toolbar.addAction(self.add_image_action)
+        self.plots_toolbar.addAction(self.add_plot_action)
+
+        self.plots_toolbar.setEnabled(False)
 
     def init_statusbar(self):
         """
@@ -222,6 +261,8 @@ class MainWindow(QMainWindow):
             # Create a new widget and tab for the file
             # and select it.
             hdf_widget = HDF5Widget(hdf)
+            hdf_widget.tree_view.selectionModel().selectionChanged.connect(self.handle_tree_selection_changed)
+
             index = self.tabs.addTab(hdf_widget, os.path.basename(filename))
             self.tabs.setCurrentIndex(index)
 
@@ -311,6 +352,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(title)
         self.tabs.setMovable(bool(self.tabs.count() > 1))
 
+        # Enable/disable the plots toolbar
+        self.handle_tree_selection_changed()
+
     def handle_open_file(self):
         """
         Open a file
@@ -381,6 +425,41 @@ class MainWindow(QMainWindow):
             ).format(version=__version__)
         )
 
+    def handle_tree_selection_changed(self):
+        """
+        Enable/disable the plots toolbar when
+        the tree selection changes.
+        """
+        self.plots_toolbar.setEnabled(False)
+
+        hdf5widget = self.tabs.currentWidget()
+
+        if not hdf5widget:
+            return
+
+        indexes = hdf5widget.tree_view.selectedIndexes()
+
+        if not indexes:
+            return
+
+        index = indexes[0]
+        path = hdf5widget.tree_model.itemFromIndex(index).data(Qt.UserRole)
+        obj = hdf5widget.hdf[path]
+        self.plots_toolbar.setEnabled(isinstance(obj, h5py.Dataset))
+
+    def handle_add_image(self):
+        """
+        Display an image window
+        """
+        hdf5widget = self.tabs.currentWidget()
+        hdf5widget.add_image()
+
+    def handle_add_plot(self):
+        """
+        Display a plot window
+        """
+        pass
+
     #
     # Events
     #
@@ -402,5 +481,6 @@ class MainWindow(QMainWindow):
         """
         The application is closing so tidy up
         """
+        self.handle_close_all_files()
         self.save_settings()
         super().closeEvent(event)
