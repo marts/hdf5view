@@ -320,7 +320,7 @@ class DataTableModel(QAbstractTableModel):
             try:
                 v = int(value)
                 self.dims.append(v)
-            except:
+            except (ValueError, TypeError):
                 if ':' in value:
                     value = value.strip()
                     # https://stackoverflow.com/questions/680826/python-create-slice-object-from-string/23895339
@@ -407,7 +407,6 @@ class DimsTableModel(QAbstractTableModel):
 
                 except ValueError:
                     return False
-
 
             self.shape[column] = value
             self.dataChanged.emit(index, index, [])
