@@ -16,6 +16,8 @@ from qtpy.QtWidgets import (
     QMainWindow,
     QScrollBar,
     QTableView,
+    QTabBar,
+    QTabWidget,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -88,11 +90,22 @@ class HDF5Widget(QWidget):
         self.data_view = QTableView()
         self.data_view.setModel(self.data_model)
 
+        # Setup tabs
+        self.tabs = QTabWidget()
+        self.tabs.setTabPosition(QTabWidget.South)
+        self.tabs.setTabsClosable(True)
+
+        self.tabs.addTab(self.data_view, 'Table')
+
+        self.tabs.tabBar().tabButton(0, QTabBar.RightSide).deleteLater()
+        self.tabs.tabBar().setTabButton(0, QTabBar.RightSide, None)
+        self.tabs.tabCloseRequested.connect(self.handle_close_tab)
+
         # Create the main layout. All the other
         # associated table views are placed in
         # surrounding dock widgets.
         layout = QVBoxLayout()
-        layout.addWidget(self.data_view)
+        layout.addWidget(self.tabs)
         self.setLayout(layout)
 
         # Finally, initialise the signals for the view
@@ -163,9 +176,22 @@ class HDF5Widget(QWidget):
 
         data = self.hdf[path]
 
-        image_view = ImageWindow(title, data)
-        self.image_views.append(image_view)
-        image_view.show()
+        #image_view = ImageWindow(title, data)
+        #self.image_views.append(image_view)
+        #image_view.show()
+
+        image_view = ImageView(data)
+
+        index = self.tabs.addTab(image_view, 'Image')
+        self.tabs.setCurrentIndex(index)
+
+    def handle_close_tab(self, index):
+        """
+        Close a tab
+        """
+        widget = self.tabs.widget(index)
+        self.tabs.removeTab(index)
+        widget.deleteLater()
 
 
 class ImageWindow(QMainWindow):
