@@ -46,6 +46,7 @@ class HDF5Widget(QWidget):
         self.tree_view.setModel(self.tree_model)
 
         self.tree_view.header().setSectionResizeMode(0, QHeaderView.Interactive)
+        self.tree_view.header().resizeSection(0, 160)
         self.tree_view.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tree_view.header().setStretchLastSection(True)
 
