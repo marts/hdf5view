@@ -279,9 +279,13 @@ class DataTableModel(QAbstractTableModel):
         return self.column_count
 
     def headerData(self, section, orientation, role):
-        if self.compound_names and role == Qt.DisplayRole and orientation == Qt.Horizontal:
-            return self.compound_names[section]
-        return super().headerData(section, orientation, role)
+        if role == Qt.DisplayRole:
+            if self.compound_names and orientation == Qt.Horizontal:
+                return self.compound_names[section]
+            else:
+                return str(section)
+
+        super().headerData(section, orientation, role)
 
     def data(self, index, role=Qt.DisplayRole):
 
