@@ -267,7 +267,7 @@ class DataTableModel(QAbstractTableModel):
             elif self.ndim >= 2:
                 self.row_count = shape[0]
                 self.column_count = shape[1]
-                self.dims = tuple([slice(None), slice(None)] + [0] * len(shape[2:]))
+                self.dims = tuple(([0] * (self.ndim - 2)) + [slice(None), slice(None)])
                 self.data_view = self.node[self.dims]
 
         self.endResetModel()
@@ -317,23 +317,29 @@ class DataTableModel(QAbstractTableModel):
 
         for i, value in enumerate(dims):
 
-            if value == ':':
-                self.dims.append(slice(None))
-
-                if row_count is None:
-                    row_count = shape[i]
-
-                elif column_count is None:
-                    column_count = shape[i]
-            else:
-                self.dims.append(int(value))
+            try:
+                v = int(value)
+                self.dims.append(v)
+            except:
+                if ':' in value:
+                    value = value.strip()
+                    # https://stackoverflow.com/questions/680826/python-create-slice-object-from-string/23895339
+                    s = slice(*map(lambda x: int(x.strip()) if x.strip() else None, value.split(':')))
+                    self.dims.append(s)
 
         self.dims = tuple(self.dims)
-
-        self.row_count = row_count if row_count is not None else 1
-        self.column_count = column_count if column_count is not None else 1
-
         self.data_view = self.node[self.dims]
+
+        try:
+            self.row_count = self.data_view.shape[0]
+        except IndexError:
+            self.row_count = 1
+
+        try:
+            self.column_count = self.data_view.shape[1]
+        except IndexError:
+            self.column_count = 1
+
         self.endResetModel()
 
 
@@ -359,7 +365,7 @@ class DimsTableModel(QAbstractTableModel):
         self.node = self.hdf[path]
 
         if isinstance(self.node, h5py.Dataset) and self.node.ndim > 2:
-            self.shape = [':', ':'] + [0] * len(self.node.shape[2:])
+            self.shape = (['0'] * (self.node.ndim - 2)) + [':', ':']
             self.column_count = len(self.shape)
 
         self.endResetModel()
@@ -393,7 +399,7 @@ class DimsTableModel(QAbstractTableModel):
             column = index.column()
             value = value.strip()
 
-            if value != ':':
+            if ':' not in value:
                 try:
                     num = int(value)
                     if num < 0 or num >= self.node.shape[column]:
@@ -401,6 +407,7 @@ class DimsTableModel(QAbstractTableModel):
 
                 except ValueError:
                     return False
+
 
             self.shape[column] = value
             self.dataChanged.emit(index, index, [])

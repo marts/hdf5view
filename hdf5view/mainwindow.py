@@ -169,7 +169,7 @@ class MainWindow(QMainWindow):
         self.dataset_dock.setObjectName('dataset_dock')
         self.dataset_dock.setMinimumWidth(MIN_DOCK_WIDTH)
 
-        self.dims_dock = QDockWidget('Axes', self)
+        self.dims_dock = QDockWidget('Slice', self)
         self.dims_dock.setObjectName('dims_dock')
         self.dims_dock.setMinimumWidth(MIN_DOCK_WIDTH)
 
