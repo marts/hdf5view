@@ -320,7 +320,7 @@ class MainWindow(QMainWindow):
             self,
             'QFileDialog.getOpenFileName()',
             '',
-            'HDF5 Files (*.hdf *.h5 *.hdf5)',
+            'HDF5 Files (*.hdf *.h5 *.hdf5);; All Files (*.*)',
             options=options
         )
 
