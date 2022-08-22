@@ -265,8 +265,8 @@ class DataTableModel(QAbstractTableModel):
                 self.row_count = shape[0]
                 self.column_count = shape[1]
             elif self.ndim >= 2:
-                self.row_count = shape[0]
-                self.column_count = shape[1]
+                self.row_count = shape[-2]
+                self.column_count = shape[-1]
                 self.dims = tuple(([0] * (self.ndim - 2)) + [slice(None), slice(None)])
                 self.data_view = self.node[self.dims]
 
