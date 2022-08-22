@@ -280,16 +280,19 @@ class ImageView(QWidget):
         # Graphics layout widget view box
         self.viewbox = graphics_layout_widget.addViewBox()
         self.viewbox.setAspectLocked(True)
+        self.viewbox.invertY(True)
 
         # Add image item to view box
         self.image_item = pg.ImageItem(border='w')
         self.viewbox.addItem(self.image_item)
+        self.image_item.setOpts(axisOrder="row-major")
 
         # Create a scrollbar for moving through image frames
         self.scrollbar = QScrollBar(Qt.Horizontal)
 
         if data.ndim == 3:
             # TODO: Set image range based on max/min?
+
             self.image_item.setImage(data[0])
             self.scrollbar.setRange(0, data.shape[0] - 1)
             self.scrollbar.valueChanged.connect(self.handle_scroll)
