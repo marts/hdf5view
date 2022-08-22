@@ -292,7 +292,6 @@ class ImageView(QWidget):
 
         if data.ndim == 3:
             # TODO: Set image range based on max/min?
-
             self.image_item.setImage(data[0])
             self.scrollbar.setRange(0, data.shape[0] - 1)
             self.scrollbar.valueChanged.connect(self.handle_scroll)
@@ -334,7 +333,7 @@ class ImageView(QWidget):
         Update the cursor position when the mouse moves
         in the image scene.
         """
-        max_x, max_y = self.image_item.image.shape
+        max_y, max_x = self.image_item.image.shape
 
         scene_pos = self.viewbox.mapSceneToView(pos)
 
