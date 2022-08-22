@@ -340,7 +340,7 @@ class ImageView(QWidget):
         x = int(scene_pos.x())
         y = int(scene_pos.y())
 
-        if x >= 0 and x < max_x and y >= 0 and max_y:
+        if x >= 0 and x < max_x and y >= 0 and y < max_y:
             self.position_label.setText('X={} Y={}'.format(x, y))
             self.viewbox.setCursor(Qt.CrossCursor)
         else:
