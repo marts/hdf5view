@@ -78,9 +78,8 @@ class HDF5Widget(QWidget):
         self.dataset_view.horizontalHeader().setStretchLastSection(True)
         self.dataset_view.verticalHeader().hide()
 
-        # Setup attributes table view
+        # Setup dims table view
         self.dims_view = QTableView()
-
         self.dims_view.setModel(self.dims_model)
         self.dims_view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.dims_view.horizontalHeader().setStretchLastSection(True)
