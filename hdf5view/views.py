@@ -110,7 +110,13 @@ class HDF5Widget(QWidget):
         layout.addWidget(self.tabs)
         self.setLayout(layout)
 
+        # save the current dims state of each tab so that it can be
+        # restored when the tab is changed
+        self.tab_dims = {id(self.tabs.widget(0)) : [i for i in self.dims_model.shape]}
 
+        # container to save the current path (selected node of the tree)
+        # for each tab so that it can be restored when the tab is changed.
+        self.tab_path = {}
 
         # Finally, initialise the signals for the view
         self.init_signals()
@@ -127,6 +133,7 @@ class HDF5Widget(QWidget):
         self.tree_view.expanded.connect(self.tree_model.handle_expanded)
         self.tree_view.collapsed.connect(self.tree_model.handle_collapsed)
 
+        self.tabs.currentChanged.connect(self.handle_tab_changed)
         self.dims_model.dataChanged.connect(self.handle_dims_data_changed)
 
 
@@ -147,12 +154,16 @@ class HDF5Widget(QWidget):
         """
         Set the dimensions to display in the table
         """
+        print(self.tabs.currentWidget())
+        print("really before", self.tab_dims)
         if isinstance(self.tabs.currentWidget(), QTableView):
             self.data_model.set_dims(self.dims_model.shape)
         elif isinstance(self.tabs.currentWidget(), ImageView):
             self.image_model.set_dims(self.dims_model.shape)
             self.image_view.update_image()
-
+        print("before", self.tab_dims)
+        self.tab_dims[id(self.tabs.currentWidget())] = [i for i in self.dims_model.shape]
+        print("after", self.tab_dims)
 
 
 
@@ -181,10 +192,30 @@ class HDF5Widget(QWidget):
 
         self.image_model.update_node(path)
 
+        print("tree", self.dims_model.shape, self.tabs.currentWidget())
+        self.tab_dims[id(self.tabs.currentWidget())] = [i for i in self.dims_model.shape]
+        self.tab_path[id(self.tabs.currentWidget())] = path
 
 
+    def handle_tab_changed(self):
+        """
+        We need to keep the dims for each tab and reset the dims_view
+        when the tab is changed.
+        """
+        # cw = self.tabs.current_widget()
+        # zp = zip(self.dims_model.shape, self.tab_dims[cw])
+        # locs = [self.dims_model.shape.index(i) for i, j in zp if i != j]
 
+        # for i in locs:
+        #     index = self.dims_model.index(0, i)
+        #     self.dims_model.setData(index, self.tab_dims[cw][i], Qt.EditRole)
 
+        print("tab", self.dims_model.shape, self.tabs.currentWidget(),
+              self.tab_dims[id(self.tabs.currentWidget())])
+        self.dims_model.beginResetModel()
+        self.dims_model.shape = self.tab_dims[id(self.tabs.currentWidget())]
+        self.dims_model.endResetModel()
+        self.dims_model.dataChanged.emit(QModelIndex(), QModelIndex(), [])
 
 
     def add_image(self):
@@ -203,7 +234,7 @@ class HDF5Widget(QWidget):
 
         self.image_view = ImageView(self.image_model, self.dims_model)
 
-
+        self.tab_dims[id(self.image_view)] = self.dims_model.shape
 
         index = self.tabs.addTab(self.image_view, 'Image')
         self.tabs.setCurrentIndex(index)
@@ -216,6 +247,7 @@ class HDF5Widget(QWidget):
         """
         widget = self.tabs.widget(index)
         self.tabs.removeTab(index)
+        self.tab_dims.pop(id(widget))
         widget.deleteLater()
 
 
@@ -352,19 +384,21 @@ class ImageView(QAbstractItemView):
 
     def update_image(self):
         self.image_item.setImage(self.model().image_view)
-        self.scrollbar.blockSignals(True)
-        self.scrollbar.setSliderPosition(self.model().dims[0])
-        self.scrollbar.blockSignals(False)
+        if self.scrollbar.sliderPosition() != self.model().dims[0]:
+            self.scrollbar.blockSignals(True)
+            self.scrollbar.setSliderPosition(self.model().dims[0])
+            self.scrollbar.blockSignals(False)
 
     def handle_scroll(self, value):
         """
         Change the image frame on scroll
         """
-        self.model().set_dims(str(value)+" : :")
-        self.image_item.setImage(self.model().image_view)
+        # self.model().set_dims(str(value)+" : :")
+        # self.image_item.setImage(self.model().image_view)
         self.dims_model.beginResetModel()
         self.dims_model.shape[0] = str(value)
         self.dims_model.endResetModel()
+        self.dims_model.dataChanged.emit(QModelIndex(), QModelIndex(), [])
         # self.frame_label.setText('Frame={}'.format(value))
 
     def handle_mouse_moved(self, pos):
