@@ -114,9 +114,9 @@ class HDF5Widget(QWidget):
         # restored when the tab is changed
         self.tab_dims = {id(self.tabs.widget(0)) : [i for i in self.dims_model.shape]}
 
-        # container to save the current path (selected node of the tree)
+        # container to save the current node (selected node of the tree)
         # for each tab so that it can be restored when the tab is changed.
-        self.tab_path = {}
+        self.tab_node = {}
 
         # Finally, initialise the signals for the view
         self.init_signals()
@@ -194,7 +194,11 @@ class HDF5Widget(QWidget):
 
         print("tree", self.dims_model.shape, self.tabs.currentWidget())
         self.tab_dims[id(self.tabs.currentWidget())] = [i for i in self.dims_model.shape]
-        self.tab_path[id(self.tabs.currentWidget())] = path
+        self.tab_node[id(self.tabs.currentWidget())] = index
+
+        if isinstance(self.tabs.currentWidget(), ImageView):
+            self.image_view.update_image()
+
 
 
     def handle_tab_changed(self):
@@ -209,6 +213,16 @@ class HDF5Widget(QWidget):
         # for i in locs:
         #     index = self.dims_model.index(0, i)
         #     self.dims_model.setData(index, self.tab_dims[cw][i], Qt.EditRole)
+
+        c_index = self.tree_view.currentIndex()
+        o_index = self.tab_node[id(self.tabs.currentWidget())]
+
+        o_slice = self.tab_dims[id(self.tabs.currentWidget())]
+
+        if c_index != o_index:
+            self.tree_view.setCurrentIndex(o_index)
+
+        self.tab_dims[id(self.tabs.currentWidget())] = o_slice
 
         print("tab", self.dims_model.shape, self.tabs.currentWidget(),
               self.tab_dims[id(self.tabs.currentWidget())])
@@ -234,10 +248,14 @@ class HDF5Widget(QWidget):
 
         self.image_view = ImageView(self.image_model, self.dims_model)
 
-        self.tab_dims[id(self.image_view)] = self.dims_model.shape
+        self.tab_dims[id(self.image_view)] = [i for i in self.dims_model.shape]
+        tree_index = self.tree_view.currentIndex()
+        self.tab_node[id(self.image_view)] = tree_index
 
         index = self.tabs.addTab(self.image_view, 'Image')
         self.tabs.setCurrentIndex(index)
+
+        print("add_image", self.tab_node)
 
 
 
@@ -384,10 +402,17 @@ class ImageView(QAbstractItemView):
 
     def update_image(self):
         self.image_item.setImage(self.model().image_view)
-        if self.scrollbar.sliderPosition() != self.model().dims[0]:
+        try:
+            if self.scrollbar.sliderPosition() != self.model().dims[0]:
+                self.scrollbar.blockSignals(True)
+                self.scrollbar.setSliderPosition(self.model().dims[0])
+                self.scrollbar.blockSignals(False)
+
+        except IndexError:
             self.scrollbar.blockSignals(True)
-            self.scrollbar.setSliderPosition(self.model().dims[0])
+            self.scrollbar.setSliderPosition(0)
             self.scrollbar.blockSignals(False)
+
 
     def handle_scroll(self, value):
         """
