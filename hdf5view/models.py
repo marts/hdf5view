@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import io
 
 import h5py
 
@@ -7,11 +8,14 @@ from qtpy.QtCore import (
     QAbstractItemModel,
     QModelIndex,
     Qt,
+    QFile,
+    QIODevice,
 )
 
 from qtpy.QtGui import (
     QBrush,
     QIcon,
+
     QStandardItem,
     QStandardItemModel,
 )
@@ -20,6 +24,7 @@ from qtpy.QtWidgets import (
     QComboBox,
     QStyledItemDelegate,
 )
+
 
 
 class TreeModel(QStandardItemModel):
@@ -262,9 +267,6 @@ class DataTableModel(QAbstractTableModel):
                 else:
                     self.column_count = 1
 
-            elif self.ndim == 2:
-                self.row_count = shape[0]
-                self.column_count = shape[1]
             elif self.ndim >= 2:
                 self.row_count = shape[-2]
                 self.column_count = shape[-1]
@@ -362,6 +364,16 @@ class ImageModel(QAbstractItemModel):
         self.image_view = None
         self.compound_names = None
 
+        # read in a 3x3 array of zeros from a resource as a
+        # blank image to display in the ImageView if the node.ndim < 2
+        w = QFile(":/images/blank_image.h5")
+        w.open(QIODevice.ReadOnly)
+        with h5py.File(io.BytesIO(w.readAll()), "r") as f:
+            self.blank_image = f["blank_image"][:]
+        w.close()
+
+
+
     def update_node(self, path):
         """
         Update the current node path
@@ -376,6 +388,9 @@ class ImageModel(QAbstractItemModel):
         self.dims = ()
 
         self.node = self.hdf[path]
+
+        self.image_view = self.blank_image
+
 
         if isinstance(self.node, h5py.Dataset):
 
@@ -393,9 +408,6 @@ class ImageModel(QAbstractItemModel):
                 else:
                     self.column_count = 1
 
-            elif self.ndim == 2:
-                self.row_count = shape[0]
-                self.column_count = shape[1]
             elif self.ndim >= 2:
                 self.row_count = shape[-2]
                 self.column_count = shape[-1]
@@ -459,6 +471,7 @@ class ImageModel(QAbstractItemModel):
         self.row_count = None
         self.column_count = None
         self.dims = []
+        self.image_view = self.blank_image
 
         for i, value in enumerate(dims):
             try:
@@ -472,7 +485,8 @@ class ImageModel(QAbstractItemModel):
                     self.dims.append(s)
 
         self.dims = tuple(self.dims)
-        self.image_view = self.node[self.dims]
+        if len(self.dims) >= 2:
+            self.image_view = self.node[self.dims]
 
         try:
             self.row_count = self.image_view.shape[0]

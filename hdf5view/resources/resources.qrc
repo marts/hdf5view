@@ -9,6 +9,7 @@
 
     <file>images/image.svg</file>
     <file>images/plot.svg</file>
+    <file>images/blank_image.h5</file>
 
 </qresource>
 </RCC>

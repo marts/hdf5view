@@ -36,6 +36,8 @@ from .models import (
 import pyqtgraph as pg
 
 
+
+
 class HDF5Widget(QWidget):
     """
     Main HDF5 view container widget
@@ -154,16 +156,15 @@ class HDF5Widget(QWidget):
         """
         Set the dimensions to display in the table
         """
-        print(self.tabs.currentWidget())
-        print("really before", self.tab_dims)
         if isinstance(self.tabs.currentWidget(), QTableView):
             self.data_model.set_dims(self.dims_model.shape)
+
         elif isinstance(self.tabs.currentWidget(), ImageView):
             self.image_model.set_dims(self.dims_model.shape)
             self.image_view.update_image()
-        print("before", self.tab_dims)
+
         self.tab_dims[id(self.tabs.currentWidget())] = [i for i in self.dims_model.shape]
-        print("after", self.tab_dims)
+
 
 
 
@@ -192,7 +193,6 @@ class HDF5Widget(QWidget):
 
         self.image_model.update_node(path)
 
-        print("tree", self.dims_model.shape, self.tabs.currentWidget())
         self.tab_dims[id(self.tabs.currentWidget())] = [i for i in self.dims_model.shape]
         self.tab_node[id(self.tabs.currentWidget())] = index
 
@@ -206,17 +206,8 @@ class HDF5Widget(QWidget):
         We need to keep the dims for each tab and reset the dims_view
         when the tab is changed.
         """
-        # cw = self.tabs.current_widget()
-        # zp = zip(self.dims_model.shape, self.tab_dims[cw])
-        # locs = [self.dims_model.shape.index(i) for i, j in zp if i != j]
-
-        # for i in locs:
-        #     index = self.dims_model.index(0, i)
-        #     self.dims_model.setData(index, self.tab_dims[cw][i], Qt.EditRole)
-
         c_index = self.tree_view.currentIndex()
         o_index = self.tab_node[id(self.tabs.currentWidget())]
-
         o_slice = self.tab_dims[id(self.tabs.currentWidget())]
 
         if c_index != o_index:
@@ -224,8 +215,6 @@ class HDF5Widget(QWidget):
 
         self.tab_dims[id(self.tabs.currentWidget())] = o_slice
 
-        print("tab", self.dims_model.shape, self.tabs.currentWidget(),
-              self.tab_dims[id(self.tabs.currentWidget())])
         self.dims_model.beginResetModel()
         self.dims_model.shape = self.tab_dims[id(self.tabs.currentWidget())]
         self.dims_model.endResetModel()
@@ -254,9 +243,6 @@ class HDF5Widget(QWidget):
 
         index = self.tabs.addTab(self.image_view, 'Image')
         self.tabs.setCurrentIndex(index)
-
-        print("add_image", self.tab_node)
-
 
 
     def handle_close_tab(self, index):
@@ -401,25 +387,28 @@ class ImageView(QAbstractItemView):
         self.image_item.scene().sigMouseMoved.connect(self.handle_mouse_moved)
 
     def update_image(self):
+        if not self.scrollbar.isVisible():
+            self.scrollbar.setVisible(True)
+
         self.image_item.setImage(self.model().image_view)
+
         try:
             if self.scrollbar.sliderPosition() != self.model().dims[0]:
                 self.scrollbar.blockSignals(True)
                 self.scrollbar.setSliderPosition(self.model().dims[0])
                 self.scrollbar.blockSignals(False)
 
-        except IndexError:
+        except (IndexError, TypeError):
             self.scrollbar.blockSignals(True)
-            self.scrollbar.setSliderPosition(0)
+            self.scrollbar.setVisible(False)
             self.scrollbar.blockSignals(False)
+
 
 
     def handle_scroll(self, value):
         """
         Change the image frame on scroll
         """
-        # self.model().set_dims(str(value)+" : :")
-        # self.image_item.setImage(self.model().image_view)
         self.dims_model.beginResetModel()
         self.dims_model.shape[0] = str(value)
         self.dims_model.endResetModel()
