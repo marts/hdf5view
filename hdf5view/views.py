@@ -48,7 +48,7 @@ class HDF5Widget(QWidget):
 
         self.hdf = hdf
 
-        self.image_views = []
+        self.image_views = {}
 
         # Initialise the models
         self.tree_model = TreeModel(self.hdf)
@@ -156,14 +156,16 @@ class HDF5Widget(QWidget):
         """
         Set the dimensions to display in the table
         """
+        id_cw = id(self.tabs.currentWidget())
+
         if isinstance(self.tabs.currentWidget(), QTableView):
             self.data_model.set_dims(self.dims_model.shape)
 
         elif isinstance(self.tabs.currentWidget(), ImageView):
             self.image_model.set_dims(self.dims_model.shape)
-            self.image_view.update_image()
+            self.image_views[id_cw].update_image()
 
-        self.tab_dims[id(self.tabs.currentWidget())] = [i for i in self.dims_model.shape]
+        self.tab_dims[id_cw] = [i for i in self.dims_model.shape]
 
 
 
@@ -193,11 +195,12 @@ class HDF5Widget(QWidget):
 
         self.image_model.update_node(path)
 
-        self.tab_dims[id(self.tabs.currentWidget())] = [i for i in self.dims_model.shape]
-        self.tab_node[id(self.tabs.currentWidget())] = index
+        id_cw = id(self.tabs.currentWidget())
+        self.tab_dims[id_cw] = [i for i in self.dims_model.shape]
+        self.tab_node[id_cw] = index
 
         if isinstance(self.tabs.currentWidget(), ImageView):
-            self.image_view.update_image()
+            self.image_views[id_cw].update_image()
 
 
 
@@ -235,13 +238,17 @@ class HDF5Widget(QWidget):
         #self.image_views.append(image_view)
         #image_view.show()
 
-        self.image_view = ImageView(self.image_model, self.dims_model)
+        iv = ImageView(self.image_model, self.dims_model)
 
-        self.tab_dims[id(self.image_view)] = [i for i in self.dims_model.shape]
+        id_iv = id(iv)
+
+        self.image_views[id_iv] = iv
+
+        self.tab_dims[id_iv] = [i for i in self.dims_model.shape]
         tree_index = self.tree_view.currentIndex()
-        self.tab_node[id(self.image_view)] = tree_index
+        self.tab_node[id_iv] = tree_index
 
-        index = self.tabs.addTab(self.image_view, 'Image')
+        index = self.tabs.addTab(self.image_views[id_iv], 'Image')
         self.tabs.setCurrentIndex(index)
 
 
@@ -252,6 +259,9 @@ class HDF5Widget(QWidget):
         widget = self.tabs.widget(index)
         self.tabs.removeTab(index)
         self.tab_dims.pop(id(widget))
+        self.tab_node.pop(id(widget))
+        if isinstance(widget, ImageView):
+            self.image_views.pop(id(widget))
         widget.deleteLater()
 
 
@@ -354,22 +364,6 @@ class ImageView(QAbstractItemView):
         self.image_item.setImage(self.model().image_view)
         self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
         self.scrollbar.valueChanged.connect(self.handle_scroll)
-
-        # if data.ndim == 3:
-        #     # TODO: Set image range based on max/min?
-        #     self.image_item.setImage(data[0])
-        #     self.scrollbar.setRange(0, data.shape[0] - 1)
-        #     self.scrollbar.valueChanged.connect(self.handle_scroll)
-        # elif data.ndim == 2:
-        #     self.image_item.setImage(data[:], autoLevels=True)
-        #     self.image_item.setBorder(None)
-        #     self.scrollbar.setRange(0, 0)
-        #     self.scrollbar.hide()
-        # else:
-        #     pass
-        # TODO: Handle the wrong sized data
-
-        # self.handle_scroll(0)
 
         layout = QVBoxLayout()
 
