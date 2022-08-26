@@ -384,6 +384,8 @@ class ImageView(QAbstractItemView):
         if not self.scrollbar.isVisible():
             self.scrollbar.setVisible(True)
 
+        self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
+
         self.image_item.setImage(self.model().image_view)
 
         try:

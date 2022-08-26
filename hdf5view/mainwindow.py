@@ -388,7 +388,7 @@ class MainWindow(QMainWindow):
         self.tabs.removeTab(index)
 
         # TODO: Clean up/close file
-        widget.close_file()
+        # widget.close_file()
         widget.deleteLater()
 
         # Update the close/close all menu items
