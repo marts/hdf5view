@@ -341,9 +341,6 @@ class ImageView(QAbstractItemView):
 
         self.setModel(model)
         self.dims_model = dims_model
-        # Statusbar widgets
-        self.position_label = QLabel()
-        self.frame_label = QLabel()
 
         # Main graphics layout widget
         graphics_layout_widget = pg.GraphicsLayoutWidget()
@@ -378,6 +375,7 @@ class ImageView(QAbstractItemView):
         self.image_item.scene().sigMouseMoved.connect(self.handle_mouse_moved)
         self.scrollbar.valueChanged.connect(self.handle_scroll)
 
+
     def update_image(self):
         if len(self.model().dims) < 2:
             if self.viewbox.isVisible():
@@ -409,6 +407,7 @@ class ImageView(QAbstractItemView):
                     self.scrollbar.blockSignals(False)
 
 
+
     def handle_scroll(self, value):
         """
         Change the image frame on scroll
@@ -417,7 +416,7 @@ class ImageView(QAbstractItemView):
         self.dims_model.shape[0] = str(value)
         self.dims_model.endResetModel()
         self.dims_model.dataChanged.emit(QModelIndex(), QModelIndex(), [])
-        # self.frame_label.setText('Frame={}'.format(value))
+
 
     def handle_mouse_moved(self, pos):
         """
@@ -433,11 +432,14 @@ class ImageView(QAbstractItemView):
             y = int(scene_pos.y())
 
             if 0 <= x < max_x and 0 <= y < max_y:
-                self.position_label.setText('X={} Y={}'.format(x, y))
+                I = self.model().image_view[y,x]
+                m = f"X={x} Y={y}, value={I:.3e}"
+                self.window().status.showMessage(m)
                 self.viewbox.setCursor(Qt.CrossCursor)
             else:
-                self.position_label.setText('')
+                self.window().status.showMessage('')
                 self.viewbox.setCursor(Qt.ArrowCursor)
+
 
     def horizontalOffset(self):
         return 0
