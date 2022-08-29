@@ -24,6 +24,8 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+import pyqtgraph as pg
+
 from .models import (
     AttributesTableModel,
     DataTableModel,
@@ -32,8 +34,6 @@ from .models import (
     TreeModel,
     ImageModel,
 )
-
-import pyqtgraph as pg
 
 
 
@@ -114,7 +114,7 @@ class HDF5Widget(QWidget):
 
         # save the current dims state of each tab so that it can be
         # restored when the tab is changed
-        self.tab_dims = {id(self.tabs.widget(0)) : [i for i in self.dims_model.shape]}
+        self.tab_dims = {id(self.tabs.widget(0)) : list(self.dims_model.shape)}
 
         # container to save the current node (selected node of the tree)
         # for each tab so that it can be restored when the tab is changed.
@@ -165,7 +165,7 @@ class HDF5Widget(QWidget):
             self.image_model.set_dims(self.dims_model.shape)
             self.image_views[id_cw].update_image()
 
-        self.tab_dims[id_cw] = [i for i in self.dims_model.shape]
+        self.tab_dims[id_cw] = list(self.dims_model.shape)
 
 
 
@@ -196,7 +196,7 @@ class HDF5Widget(QWidget):
         self.image_model.update_node(path)
 
         id_cw = id(self.tabs.currentWidget())
-        self.tab_dims[id_cw] = [i for i in self.dims_model.shape]
+        self.tab_dims[id_cw] = list(self.dims_model.shape)
         self.tab_node[id_cw] = index
 
         if isinstance(self.tabs.currentWidget(), ImageView):
@@ -244,7 +244,7 @@ class HDF5Widget(QWidget):
 
         self.image_views[id_iv] = iv
 
-        self.tab_dims[id_iv] = [i for i in self.dims_model.shape]
+        self.tab_dims[id_iv] = list(self.dims_model.shape)
         tree_index = self.tree_view.currentIndex()
         self.tab_node[id_iv] = tree_index
 
@@ -361,10 +361,6 @@ class ImageView(QAbstractItemView):
         # Create a scrollbar for moving through image frames
         self.scrollbar = QScrollBar(Qt.Horizontal)
 
-        self.image_item.setImage(self.model().image_view)
-        self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
-        self.scrollbar.valueChanged.connect(self.handle_scroll)
-
         layout = QVBoxLayout()
 
         layout.addWidget(graphics_layout_widget)
@@ -377,28 +373,40 @@ class ImageView(QAbstractItemView):
 
         self.init_signals()
 
+
     def init_signals(self):
         self.image_item.scene().sigMouseMoved.connect(self.handle_mouse_moved)
+        self.scrollbar.valueChanged.connect(self.handle_scroll)
 
     def update_image(self):
-        if not self.scrollbar.isVisible():
-            self.scrollbar.setVisible(True)
+        if len(self.model().dims) < 2:
+            if self.viewbox.isVisible():
+                self.viewbox.setVisible(False)
 
-        self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
-
-        self.image_item.setImage(self.model().image_view)
-
-        try:
-            if self.scrollbar.sliderPosition() != self.model().dims[0]:
+            if self.scrollbar.isVisible():
                 self.scrollbar.blockSignals(True)
-                self.scrollbar.setSliderPosition(self.model().dims[0])
+                self.scrollbar.setVisible(False)
                 self.scrollbar.blockSignals(False)
 
-        except (IndexError, TypeError):
-            self.scrollbar.blockSignals(True)
-            self.scrollbar.setVisible(False)
-            self.scrollbar.blockSignals(False)
+        else:
+            if not self.viewbox.isVisible():
+                self.viewbox.setVisible(True)
 
+            self.image_item.setImage(self.model().image_view)
+
+            try:
+                if not self.scrollbar.isVisible():
+                    self.scrollbar.setVisible(True)
+                self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
+                if self.scrollbar.sliderPosition() != self.model().dims[0]:
+                    self.scrollbar.blockSignals(True)
+                    self.scrollbar.setSliderPosition(self.model().dims[0])
+                    self.scrollbar.blockSignals(False)
+            except (IndexError, TypeError):
+                if self.scrollbar.isVisible():
+                    self.scrollbar.blockSignals(True)
+                    self.scrollbar.setVisible(False)
+                    self.scrollbar.blockSignals(False)
 
 
     def handle_scroll(self, value):
@@ -416,19 +424,20 @@ class ImageView(QAbstractItemView):
         Update the cursor position when the mouse moves
         in the image scene.
         """
-        max_y, max_x = self.image_item.image.shape
+        if self.image_item.image is not None and len(self.model().dims) >= 2:
+            max_y, max_x = self.image_item.image.shape
 
-        scene_pos = self.viewbox.mapSceneToView(pos)
+            scene_pos = self.viewbox.mapSceneToView(pos)
 
-        x = int(scene_pos.x())
-        y = int(scene_pos.y())
+            x = int(scene_pos.x())
+            y = int(scene_pos.y())
 
-        if x >= 0 and x < max_x and y >= 0 and y < max_y:
-            self.position_label.setText('X={} Y={}'.format(x, y))
-            self.viewbox.setCursor(Qt.CrossCursor)
-        else:
-            self.position_label.setText('')
-            self.viewbox.setCursor(Qt.ArrowCursor)
+            if 0 <= x < max_x and 0 <= y < max_y:
+                self.position_label.setText('X={} Y={}'.format(x, y))
+                self.viewbox.setCursor(Qt.CrossCursor)
+            else:
+                self.position_label.setText('')
+                self.viewbox.setCursor(Qt.ArrowCursor)
 
     def horizontalOffset(self):
         return 0
