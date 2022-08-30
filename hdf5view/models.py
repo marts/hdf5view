@@ -403,28 +403,11 @@ class ImageModel(QAbstractItemModel):
 
         self.endResetModel()
 
-    def getNodeFromIndex(self, index):
-        if index.isValid():
-            node = index.internalPointer()
-            if node:
-                return node
-        return None
-
     def parent(self, childIndex=QModelIndex()):
-        node = self.getNodeFromIndex(childIndex)
-        parentNode = node.getParent()
-        if parentNode == self.items:
-            return QModelIndex()
-        return self.createIndex(parentNode.row(), 0, parentNode)
+        return self.createIndex()
 
     def index(self, row, column, parentIndex=QModelIndex()):
-        parentNode = self.getNodeFromIndex(parentIndex)
-        childNode = parentNode.getChildren(row)
-        if childNode:
-            newIndex=self.createIndex(row, column, childNode)
-            return newIndex
-        else:
-            return QModelIndex()
+        return self.createIndex()
 
     def rowCount(self, parent=QModelIndex()):
         return self.row_count
