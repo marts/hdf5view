@@ -5,16 +5,16 @@ from qtpy.QtCore import (
     QModelIndex,
 )
 
-from qtpy.QtGui import (
-    QKeySequence,
-)
+# from qtpy.QtGui import (
+#     QKeySequence,
+# )
 
 from qtpy.QtWidgets import (
     QAbstractItemView,
-    QAction,
+    # QAction,
     QHeaderView,
-    QLabel,
-    QMainWindow,
+    # QLabel,
+    # QMainWindow,
     QScrollBar,
     QTableView,
     QTabBar,
@@ -211,7 +211,7 @@ class HDF5Widget(QWidget):
         """
         c_index = self.tree_view.currentIndex()
         o_index = self.tab_node[id(self.tabs.currentWidget())]
-        o_slice = self.tab_dims[id(self.tabs.currentWidget())]
+        o_slice = list(self.tab_dims[id(self.tabs.currentWidget())])
 
         if c_index != o_index:
             self.tree_view.setCurrentIndex(o_index)
@@ -219,7 +219,7 @@ class HDF5Widget(QWidget):
         self.tab_dims[id(self.tabs.currentWidget())] = o_slice
 
         self.dims_model.beginResetModel()
-        self.dims_model.shape = self.tab_dims[id(self.tabs.currentWidget())]
+        self.dims_model.shape = list(self.tab_dims[id(self.tabs.currentWidget())])
         self.dims_model.endResetModel()
         self.dims_model.dataChanged.emit(QModelIndex(), QModelIndex(), [])
 
@@ -228,16 +228,6 @@ class HDF5Widget(QWidget):
         """
         Add an image from the hdf5 file.
         """
-        # index = self.tree_view.selectedIndexes()[0]
-        # path = self.tree_model.itemFromIndex(index).data(Qt.UserRole)
-        # title = '{} - {}'.format(self.hdf.filename, path)
-
-        # data = self.hdf[path]
-
-        #image_view = ImageWindow(title, data)
-        #self.image_views.append(image_view)
-        #image_view.show()
-
         iv = ImageView(self.image_model, self.dims_model)
 
         id_iv = id(iv)
@@ -328,7 +318,12 @@ class HDF5Widget(QWidget):
 
 class ImageView(QAbstractItemView):
     """
-    Very rough image view, work in progress.
+    Shows a greyscale image view of the associated ImageModel.
+
+    If the node of the hdf5 file has ndim > 2, the image shown can be
+    changed by changing the slice (DimsTableModel). A scrollbar is
+    provided which can also be used to scroll through the images
+    in the first axis.
 
     TODO: Axis selection
           Min/Max scaling
@@ -395,12 +390,15 @@ class ImageView(QAbstractItemView):
             try:
                 if not self.scrollbar.isVisible():
                     self.scrollbar.setVisible(True)
+
                 self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
+
                 if self.scrollbar.sliderPosition() != self.model().dims[0]:
                     self.scrollbar.blockSignals(True)
                     self.scrollbar.setSliderPosition(self.model().dims[0])
                     self.scrollbar.blockSignals(False)
-            except (IndexError, TypeError):
+
+            except TypeError:
                 if self.scrollbar.isVisible():
                     self.scrollbar.blockSignals(True)
                     self.scrollbar.setVisible(False)
@@ -433,8 +431,7 @@ class ImageView(QAbstractItemView):
 
             if 0 <= x < max_x and 0 <= y < max_y:
                 I = self.model().image_view[y,x]
-                m = f"X={x} Y={y}, value={I:.3e}"
-                self.window().status.showMessage(m)
+                self.window().status.showMessage(f"X={x} Y={y}, value={I:.3e}")
                 self.viewbox.setCursor(Qt.CrossCursor)
             else:
                 self.window().status.showMessage('')

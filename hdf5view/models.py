@@ -471,6 +471,9 @@ class ImageModel(QAbstractItemModel):
                     s = slice(*map(lambda x: int(x.strip()) if x.strip() else None, value.split(':')))
                     self.dims.append(s)
 
+        if self.ndim == 2:
+            self.dims = [slice(None), slice(None)]
+
         self.dims = tuple(self.dims)
 
         if len(self.dims) >= 2:
