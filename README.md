@@ -1,8 +1,7 @@
 # HDF5View
 
-Simple Qt/Python based viewer for HDF5 files. Currently, it just displays a file tree, data tables and attributes. Everything is loaded dynamically, so hopefully it should be able to handle HDF5 files of any size and structure.
+Simple Qt/Python based viewer for HDF5 files. Displays a file tree, data tables and attributes and can render greyscale images of any nodes which have two or more dimensions. Everything is loaded dynamically, so hopefully it should be able to handle HDF5 files of any size and structure.
 
-I hope to add pyqtgraph plotting and some image rendering soon.
 
 ## Installing
 
@@ -76,7 +75,6 @@ pyside2-rcc hdf5view/resources/resources.qrc -o hdf5view/resources/resources.py
 
 ## TODO:
 
-* Actually use pyqtgraph to plot some stuff.
-* Add an image view
+* Add xy plots in pyqtgraph
 * Add some 3D stuff
 * Build a deb package
