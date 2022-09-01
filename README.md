@@ -9,7 +9,7 @@ I hope to add pyqtgraph plotting and some image rendering soon.
 On linux (Ubuntu/Debian) I generally prefer installing the system packages of PyQt5 and/or PySide2 - in that case don't bother with uncommenting stuff in install_requires in setup.py:
 
 ```
-sudo apt install python3-pyqt5 python3-h5py python3-qtpy
+sudo apt install python3-pyqt5 python3-h5py python3-pyqtgraph python3-qtpy
 ```
 
 To install system wide, download or clone the repo. Uncomment the preferred Qt bindings in setup.py (or install system packages...see below):
@@ -49,7 +49,7 @@ source bin/activate
 pip install -e .
 ```
 
-## Chosing Qt API bindings
+## Choosing Qt API bindings
 
 `qtpy` is used as an abstraction layer for PyQt5/PySide2. Currently, the default is to use PyQt5. This is because the version of pyqtgraph (0.10.0) I have wouldn't work with PySide2.
 

@@ -3,6 +3,7 @@
 import os
 import sys
 import argparse
+import traceback
 
 if not os.environ.get('QT_API'):  # noqa
     os.environ['QT_API'] = 'pyqt5'
@@ -26,6 +27,13 @@ from . import __version__
 from .mainwindow import MainWindow
 from .resources import resources  # noqa
 
+def my_excepthook(type, value, tb):
+    print('\x1b[31m\x1b[1m' +\
+          'Unhandled error: {} {} {}'.format(type, value,
+                                             ''.join(traceback.format_tb(tb)) \
+                                             + '\x1b[0m'))
+
+sys.excepthook = my_excepthook
 
 def main():
     """
