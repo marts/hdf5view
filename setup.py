@@ -33,6 +33,7 @@ setup(
         # 'PyQt5',  # Install PyQt5 Qt bindings
         # 'PySide2',  # Install PySide2 Qt bindings
         'QtPy',   # Abstraction layer on top of Qt bindings for swapping between PyQt and Pyside2
+        'pyqtgraph',
     ],
     zip_safe=False,
     include_package_data=True,
