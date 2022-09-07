@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import h5py
+import qtpy
 
 from qtpy.QtCore import (
     QAbstractTableModel,
@@ -57,11 +58,11 @@ class TreeModel(QStandardItemModel):
         attrs_item.setForeground(QBrush((Qt.darkGray)))
 
         if isinstance(node, h5py.Dataset):
-            tree_item.setIcon(QIcon(':/images/dataset.svg'))
+            tree_item.setIcon(QIcon('icons:dataset.svg'))
             dataset_item = QStandardItem(str(node.shape))
 
         elif isinstance(node, h5py.Group):
-            tree_item.setIcon(QIcon(':/images/folder.svg'))
+            tree_item.setIcon(QIcon('icons:folder.svg'))
             dataset_item = QStandardItem('')
 
         dataset_item.setForeground(QBrush((Qt.darkGray)))
@@ -78,7 +79,7 @@ class TreeModel(QStandardItemModel):
         if not item.hasChildren():
             return
 
-        item.setIcon(QIcon(':/images/folder-open.svg'))
+        item.setIcon(QIcon('icons:folder-open.svg'))
 
         for row in range(item.rowCount()):
             child_item = item.child(row, 0)
@@ -98,7 +99,7 @@ class TreeModel(QStandardItemModel):
         Update the icon when collapsing a group
         """
         item = self.itemFromIndex(index)
-        item.setIcon(QIcon(':/images/folder.svg'))
+        item.setIcon(QIcon('icons:folder.svg'))
 
 
 class AttributesTableModel(QAbstractTableModel):
@@ -312,11 +313,11 @@ class DataTableModel(QAbstractTableModel):
 
         self.beginResetModel()
 
-        row_count = None
-        column_count = None
+        self.row_count = None
+        self.column_count = None
 
         self.dims = []
-        shape = self.node.shape
+        self.shape = self.node.shape
 
         for i, value in enumerate(dims):
 
@@ -514,7 +515,11 @@ class DimsTableModel(QAbstractTableModel):
                 return self.shape[index.column()]
 
             elif role == Qt.TextAlignmentRole:
-                return Qt.AlignCenter
+                if qtpy.API_NAME in ["PyQt5", "PySide2"]:
+                    return Qt.AlignCenter
+
+                else:
+                    return Qt.AlignmentFlag.AlignVCenter + Qt.AlignmentFlag.AlignHCenter
 
     def flags(self, index):
         flags = super().flags(index)
@@ -543,36 +548,36 @@ class DimsTableModel(QAbstractTableModel):
         return False
 
 
-class ComboBoxItemDelegate(QStyledItemDelegate):
+# class ComboBoxItemDelegate(QStyledItemDelegate):
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
+#     def __init__(self, parent=None):
+#         super().__init__(parent)
 
-    def createEditor(self, parent, option, index):
-        row = index.row()
+#     def createEditor(self, parent, option, index):
+#         row = index.row()
 
-        model = index.model()
-        max_value = model.node.shape[row]
+#         model = index.model()
+#         max_value = model.node.shape[row]
 
-        # Create the combobox and populate it
-        cb = QComboBox(parent)
-        for i in range(max_value):
-            cb.addItem(str(i))
-        cb.addItem(':')
+#         # Create the combobox and populate it
+#         cb = QComboBox(parent)
+#         for i in range(max_value):
+#             cb.addItem(str(i))
+#         cb.addItem(':')
 
-        return cb
+#         return cb
 
-    def setEditorData(self, editor, index):
-        cb = editor
+#     def setEditorData(self, editor, index):
+#         cb = editor
 
-        # Get the index of the text in the combobox that
-        # matches the current value of the item
-        currentText = index.data(Qt.DisplayRole)
-        cbIndex = cb.findText(currentText)
+#         # Get the index of the text in the combobox that
+#         # matches the current value of the item
+#         currentText = index.data(Qt.DisplayRole)
+#         cbIndex = cb.findText(currentText)
 
-        if cbIndex != -1:
-            cb.setCurrentIndex(cbIndex)
+#         if cbIndex != -1:
+#             cb.setCurrentIndex(cbIndex)
 
-    def setModelData(self, editor, model, index):
-        cb = editor
-        model.setData(index, cb.currentText(), Qt.EditRole)
+#     def setModelData(self, editor, model, index):
+#         cb = editor
+#         model.setData(index, cb.currentText(), Qt.EditRole)

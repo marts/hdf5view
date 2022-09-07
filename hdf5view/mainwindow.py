@@ -57,7 +57,7 @@ class MainWindow(QMainWindow):
         Initialise actions
         """
         self.open_action = QAction(
-            QIcon(':/images/folder-open.svg'),
+            QIcon('icons:folder-open.svg'),
             '&Open...',
             self,
             shortcut=QKeySequence.Open,
@@ -119,7 +119,7 @@ class MainWindow(QMainWindow):
         #
 
         self.add_image_action = QAction(
-            QIcon(':/images/image.svg'),
+            QIcon('icons:image.svg'),
             'Add &Image',
             self,
             statusTip='Add image',
@@ -127,7 +127,7 @@ class MainWindow(QMainWindow):
         )
 
         self.add_plot_action = QAction(
-            QIcon(':/images/plot.svg'),
+            QIcon('icons:plot.svg'),
             'Add &Plot',
             self,
             statusTip='Add plot',
