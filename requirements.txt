@@ -1,2 +1,0 @@
-# Just load the requirements from install_requires in setup.py
-.
