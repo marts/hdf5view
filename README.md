@@ -1,3 +1,6 @@
+[![PyPI Version](https://img.shields.io/pypi/v/hdf5view.svg)](https://pypi.python.org/pypi/hdf5view/)
+[![Supported Python Versions](https://img.shields.io/pypi/pyversions/hdf5view.svg)](https://pypi.python.org/pypi/hdf5view/)
+
 # hdf5view
 
 Simple Qt/Python based viewer for HDF5 files. Displays a file tree, data tables and attributes and can render greyscale images of any nodes which have two or more dimensions. Everything is loaded dynamically, so hopefully it should be able to handle HDF5 files of any size and structure.
