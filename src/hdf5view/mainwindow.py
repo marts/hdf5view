@@ -281,7 +281,10 @@ class MainWindow(QMainWindow):
             self.restoreGeometry(geometry)
         else:
             geometry = self.app.desktop().availableGeometry(self)
-            self.setGeometry(QRect(0, 0, geometry.width() * 0.8, geometry.height() * 0.7))
+            self.setGeometry(QRect(0,
+                                   0,
+                                   int(geometry.width() * 0.8),
+                                   int(geometry.height() * 0.7)))
 
         # Restore the window state
         window_state = settings.value('windowState')
