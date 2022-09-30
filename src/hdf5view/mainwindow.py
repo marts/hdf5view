@@ -258,6 +258,10 @@ class MainWindow(QMainWindow):
             # Add filename to top of recent files list
             self.recent_files.insert(0, filename)
 
+            # ensure not more than MAX_RECENT_FILES are kept:
+            if len(self.recent_files) > MAX_RECENT_FILES:
+                self.recent_files = self.recent_files[:MAX_RECENT_FILES]
+
             # Create a new widget and tab for the file
             # and select it.
             hdf_widget = HDF5Widget(hdf)
