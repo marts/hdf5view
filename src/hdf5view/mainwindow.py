@@ -3,6 +3,8 @@
 import os
 import h5py
 
+from qtpy import API_NAME
+
 from qtpy.QtCore import (
     Qt,
     QRect,
@@ -284,7 +286,10 @@ class MainWindow(QMainWindow):
         if geometry and not geometry.isEmpty():
             self.restoreGeometry(geometry)
         else:
-            geometry = self.app.desktop().availableGeometry(self)
+            if API_NAME in ["PyQt6", "PySide6"]:
+                geometry = self.app.screens()[0].availableGeometry()
+            else:
+                geometry = self.app.desktop().availableGeometry(self)
             self.setGeometry(QRect(0,
                                    0,
                                    int(geometry.width() * 0.8),
