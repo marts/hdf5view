@@ -256,6 +256,10 @@ class DataTableModel(QAbstractTableModel):
 
             self.compound_names = self.node.dtype.names
 
+            if self.ndim == 0:
+                self.row_count = 1
+                self.column_count = 1
+
             if self.ndim == 1:
                 self.row_count = shape[0]
 
@@ -291,6 +295,8 @@ class DataTableModel(QAbstractTableModel):
 
         if index.isValid():
             if role in (Qt.DisplayRole, Qt.ToolTipRole):
+                if self.ndim == 0:
+                    return str(self.node[...])
                 if self.ndim == 1:
                     if self.compound_names:
                         name = self.compound_names[index.column()]
@@ -308,6 +314,7 @@ class DataTableModel(QAbstractTableModel):
                         return str(self.data_view[index.row()])
                     elif self.data_view.ndim >= 2:
                         return str(self.data_view[index.row(), index.column()])
+
 
     def set_dims(self, dims):
 
