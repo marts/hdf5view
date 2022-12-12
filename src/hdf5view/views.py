@@ -372,7 +372,8 @@ class ImageView(QAbstractItemView):
 
 
     def update_image(self):
-        if len(self.model().dims) < 2:
+        small = self.model().ndim == 2 and any([i == 1 for i in self.model().node.shape])
+        if self.model().ndim < 2 or small:
             if self.viewbox.isVisible():
                 self.viewbox.setVisible(False)
 

@@ -260,7 +260,7 @@ class DataTableModel(QAbstractTableModel):
                 self.row_count = 1
                 self.column_count = 1
 
-            if self.ndim == 1:
+            elif self.ndim == 1:
                 self.row_count = shape[0]
 
                 if self.compound_names:
@@ -268,7 +268,21 @@ class DataTableModel(QAbstractTableModel):
                 else:
                     self.column_count = 1
 
-            elif self.ndim >= 2:
+            elif self.ndim == 2:
+                self.row_count = shape[-2]
+                self.column_count = shape[-1]
+                self.dims = tuple([slice(None), slice(None)])
+                self.data_view = self.node[self.dims]
+
+            elif self.ndim > 2 and shape[-1] in [3, 4]:
+                self.row_count = shape[-3]
+                self.column_count = shape[-2]
+                self.dims = tuple(([0] * (self.ndim - 3)) + [slice(None),
+                                                             slice(None),
+                                                             slice(None)])
+                self.data_view = self.node[self.dims]
+
+            else:
                 self.row_count = shape[-2]
                 self.column_count = shape[-1]
                 self.dims = tuple(([0] * (self.ndim - 2)) + [slice(None), slice(None)])
@@ -291,29 +305,44 @@ class DataTableModel(QAbstractTableModel):
 
         super().headerData(section, orientation, role)
 
-    def data(self, index, role=Qt.DisplayRole):
 
+    def data(self, index, role=Qt.DisplayRole):
         if index.isValid():
             if role in (Qt.DisplayRole, Qt.ToolTipRole):
                 if self.ndim == 0:
-                    return str(self.node[...])
-                if self.ndim == 1:
+                    try:
+                        q = str(self.node.asstr()[...])
+                    except TypeError:
+                        q = str(self.node[...])
+
+                elif self.ndim == 1:
                     if self.compound_names:
                         name = self.compound_names[index.column()]
-                        return str(self.node[index.row(), name])
+                        try:
+                            q = self.node[index.row(), name].decode()
+                        except AttributeError:
+                            q = str(self.node[index.row(), name])
                     else:
-                        return str(self.node[index.row()])
+                        try:
+                            q = self.node[index.row()].decode()
+                        except AttributeError:
+                            q = str(self.node[index.row()])
 
                 elif self.ndim == 2:
-                    return str(self.node[index.row(), index.column()])
+                    try:
+                        q = self.node[index.row(), index.column()].decode()
+                    except AttributeError:
+                        q = str(self.node[index.row(), index.column()])
 
                 elif self.ndim > 2:
                     if self.data_view.ndim == 0:
-                        return str(self.data_view)
+                        q = str(self.data_view)
                     elif self.data_view.ndim == 1:
-                        return str(self.data_view[index.row()])
+                        q = str(self.data_view[index.row()])
                     elif self.data_view.ndim >= 2:
-                        return str(self.data_view[index.row(), index.column()])
+                        q = str(self.data_view[index.row(), index.column()])
+
+                return q
 
 
     def set_dims(self, dims):
@@ -395,7 +424,11 @@ class ImageModel(QAbstractItemModel):
 
             self.compound_names = self.node.dtype.names
 
-            if self.ndim == 1:
+            if self.ndim == 0:
+                self.row_count = 1
+                self.column_count = 1
+
+            elif self.ndim == 1:
                 self.row_count = shape[0]
 
                 if self.compound_names:
@@ -403,10 +436,25 @@ class ImageModel(QAbstractItemModel):
                 else:
                     self.column_count = 1
 
-            elif self.ndim >= 2:
+            elif self.ndim == 2:
                 self.row_count = shape[-2]
                 self.column_count = shape[-1]
-                self.dims = tuple(([0] * (self.ndim - 2)) + [slice(None), slice(None)])
+                self.dims = tuple([slice(None), slice(None)])
+                self.image_view = self.node[self.dims]
+
+            elif self.ndim > 2 and shape[-1] in [3, 4]:
+                self.row_count = shape[-3]
+                self.column_count = shape[-2]
+                self.dims = tuple(([0] * (self.ndim - 3)) + [slice(None),
+                                                             slice(None),
+                                                             slice(None)])
+                self.image_view = self.node[self.dims]
+
+            else:
+                self.row_count = shape[-2]
+                self.column_count = shape[-1]
+                self.dims = tuple(([0] * (self.ndim - 2)) + [slice(None),
+                                                             slice(None)])
                 self.image_view = self.node[self.dims]
 
         self.endResetModel()
@@ -501,8 +549,13 @@ class DimsTableModel(QAbstractTableModel):
         self.node = self.hdf[path]
 
         if isinstance(self.node, h5py.Dataset) and self.node.ndim > 2:
-            self.shape = (['0'] * (self.node.ndim - 2)) + [':', ':']
-            self.column_count = len(self.shape)
+            if self.node.shape[-1] in [3, 4]:
+                self.shape = (['0'] * (self.node.ndim - 3)) + [':', ':', ':']
+                self.column_count = len(self.shape)
+
+            else:
+                self.shape = (['0'] * (self.node.ndim - 2)) + [':', ':']
+                self.column_count = len(self.shape)
 
         self.endResetModel()
 
