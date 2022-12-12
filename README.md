@@ -3,7 +3,7 @@
 
 # hdf5view
 
-Simple Qt/Python based viewer for HDF5 files. Displays a file tree, data tables and attributes and can render greyscale images of any nodes which have two or more dimensions. Everything is loaded dynamically, so hopefully it should be able to handle HDF5 files of any size and structure.
+Simple Qt/Python based viewer for HDF5 files. Displays a file tree, data tables and attributes and can render greyscale images of any nodes which have two or more dimensions, and rgb or rgba images of any nodes with three or more dimensions. Everything is loaded dynamically, so hopefully it should be able to handle HDF5 files of any size and structure.
 
 
 ## 1. Installing
@@ -130,7 +130,11 @@ You can also create a desktop link to start the program for convenience. A Windo
 
 The structure of the HDF5 file can be navigated using the tree view on the left hand side. The central panel displays a table of the data at the node selected. If the node has more than two dimensions, a 2D slice of the data is displayed in the table. On the right hand side you can see and modify the slice shown; and see details of the node and any associated attributes.
 
-To display a greyscale image of the data at a particular node, click the image icon on the toolbar at the top of the window. This will open an Image tab at the current node. The image is initially take from the last two dimensions of the node. A scrollbar is provided, which currently can be used to scroll through the first dimension of the node. You can alternatively change the slice manually and the scrollbar will move accordingly. You can have several image tabs open at once. Image tabs remember the node and slice if you switch to a different tab and back. Switching to a different node results in the default behaviour that the image shown is the last two dimensions of the first index of the first dimension.
+To display an image of a particular node, click the image icon on the toolbar at the top of the window. This will open an Image tab at the current node. You can have several image tabs open at once. Image tabs remember the node and slice if you switch to a different tab and back. Switching to a different node results in the default rendering behaviour for the image. The defaut image rendering is as follows: 
+
+* Greyscale: if the node has two or more dimensions and the shape of the last dimension is greater than 4. The image is initially take from the last two dimensions of the node. A scrollbar is provided, which currently can be used to scroll through the first dimension of the node. This is useful for viewing a stack of greyscale images. You can alternatively change the slice manually and the scrollbar will move accordingly.
+
+* rgb or rgba: if the node has three or more dimensions and the shape of the last dimension is three or four. If the node has more than three dimensions, a scrollbar is provided, which can be used to scroll through the first dimension. This is useful for a stack of rgb or rgba images, for example.
 
 ## 4. Testing
 
