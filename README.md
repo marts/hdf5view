@@ -132,7 +132,7 @@ The structure of the HDF5 file can be navigated using the tree view on the left 
 
 To display an image of a particular node, click the image icon on the toolbar at the top of the window. This will open an Image tab at the current node. You can have several image tabs open at once. Image tabs remember the node and slice if you switch to a different tab and back. Switching to a different node results in the default rendering behaviour for the image. The defaut image rendering is as follows: 
 
-* Greyscale: if the node has two or more dimensions and the shape of the last dimension is greater than 4. The image is initially take from the last two dimensions of the node. A scrollbar is provided, which currently can be used to scroll through the first dimension of the node. This is useful for viewing a stack of greyscale images. You can alternatively change the slice manually and the scrollbar will move accordingly.
+* Greyscale: if the node has two or more dimensions and the shape of the last dimension is greater than 4. The image is initially taken from the last two dimensions of the node. A scrollbar is provided, which currently can be used to scroll through the first dimension of the node. This is useful for viewing a stack of greyscale images. You can alternatively change the slice manually and the scrollbar will move accordingly.
 
 * rgb or rgba: if the node has three or more dimensions and the shape of the last dimension is three or four. If the node has more than three dimensions, a scrollbar is provided, which can be used to scroll through the first dimension. This is useful for a stack of rgb or rgba images, for example.
 
