@@ -150,7 +150,10 @@ class AttributesTableModel(QAbstractTableModel):
                 if column == 0:
                     return self.keys[row]
                 elif column == 1:
-                    return str(self.values[row])
+                    try:
+                        return self.values[row].decode()
+                    except AttributeError:
+                        return str(self.values[row])
                 elif column == 2:
                     return str(type(self.values[row]))
 
