@@ -423,7 +423,10 @@ class ImageView(QAbstractItemView):
         in the image scene.
         """
         if self.image_item.image is not None and len(self.model().dims) >= 2:
-            max_y, max_x = self.image_item.image.shape
+            try:
+                max_y, max_x = self.image_item.image.shape
+            except ValueError:
+                max_y, max_x, max_z = self.image_item.image.shape
 
             scene_pos = self.viewbox.mapSceneToView(pos)
 
@@ -432,7 +435,15 @@ class ImageView(QAbstractItemView):
 
             if 0 <= x < max_x and 0 <= y < max_y:
                 I = self.model().image_view[y,x]
-                self.window().status.showMessage(f"X={x} Y={y}, value={I:.3e}")
+                msg1 = f"X={x} Y={y}, value="
+                try:
+                    msg2 = f"{I:.3e}"
+                except TypeError:
+                    try:
+                        msg2 = f"[{I[0]:.3e}, {I[1]:.3e}, {I[2]:.3e}, {I[3]:.3e}]"
+                    except IndexError:
+                        msg2 = f"[{I[0]:.3e}, {I[1]:.3e}, {I[2]:.3e}]"
+                self.window().status.showMessage(msg1 + msg2)
                 self.viewbox.setCursor(Qt.CrossCursor)
             else:
                 self.window().status.showMessage('')

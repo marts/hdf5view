@@ -3,7 +3,7 @@
 import os
 import sys
 import argparse
-#import traceback
+# import traceback
 
 # to force qtpy to use a particular Qt binding, uncomment the line below,
 # and set the string to your preferred binding i.e. 'pyqt5', 'pyside2',
