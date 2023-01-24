@@ -242,7 +242,7 @@ class MainWindow(QMainWindow):
         Open a hdf5 file
         """
         try:
-            hdf = h5py.File(filename, 'r')
+            hdf = h5py.File(filename, 'a')
         except OSError as e:
             hdf = None
             QMessageBox.critical(

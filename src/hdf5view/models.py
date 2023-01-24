@@ -118,11 +118,18 @@ class AttributesTableModel(QAbstractTableModel):
         """
         Update the current node path
         """
-        self.beginResetModel()
         self.node = self.hdf[path]
+        self.update_model()
+
+    def update_model(self):
+        """
+        Update the model from the node
+        """
+        self.beginResetModel()
 
         self.keys = list(self.node.attrs.keys())
         self.values = list(self.node.attrs.values())
+        self.classes = [val.__class__.__name__ for val in self.values]
 
         self.row_count = len(self.keys)
         self.endResetModel()
@@ -155,8 +162,112 @@ class AttributesTableModel(QAbstractTableModel):
                     except AttributeError:
                         return str(self.values[row])
                 elif column == 2:
-                    return str(type(self.values[row]))
+                    return self.classes[row]
 
+    def flags(self, index):
+        """return flags to make attributes editable"""
+        return Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable
+
+    def setData(self, index: QModelIndex, value, role: int = ...) -> bool:
+        """Called when settings data. Performs some checks and if they are successful,
+        sets the data both in the hdf5 file and in the local model."""
+        if index.isValid():
+            column = index.column()
+            row = index.row()
+
+            # only handle non emtpy values
+            value = value.strip()
+            if len(value) == 0:
+                return False
+
+            old_key = self.keys[row]
+            old_value = self.values[row]
+            old_class = self.classes[row]
+
+            if column == 0:
+                if value in self.keys:
+                    # reject, because we do not want to overwrite
+                    # other data
+                    return False
+
+                # try removing old entry
+                if self.node.attrs.pop(old_key):
+                    self.node.attrs[value] = old_value
+                    # update model
+                    self.keys[row] = value
+
+                    self.dataChanged.emit(index, index, [])
+                    return True
+            elif column == 1 or column == 2:
+                # when changing value or calss, assure that class(value) still
+                # makes sense and then accept it
+                new_value = value if column == 1 else old_value
+                new_class = value if column == 2 else old_class
+
+                # convert value to known classes
+                if new_class == 'str':
+                    new_value = str(new_value)
+                elif new_class in ['int', 'int32']:
+                    try:
+                        new_value = int(new_value)
+                    except ValueError:
+                        return False
+                elif new_class in ['float', 'float32', 'float64']:
+                    try:
+                        new_value = float(new_value)
+                    except ValueError:
+                        return False
+                else:
+                    # unknown class, rejecting
+                    return False
+
+                self.node.attrs[old_key] = new_value
+                # update model
+                self.values[row] = str(new_value)
+                self.classes[row] = new_class
+
+                self.dataChanged.emit(index, index, [])
+                return True
+
+        return False
+
+    def add_row(self):
+        """Add an extra row to the attributes, row is filled
+        with a standard key and value."""
+        # a node has to be selected
+        if not self.node:
+            return
+
+        self.beginInsertRows(
+            self.index(self.row_count, 0),
+            self.row_count + 1,
+            self.row_count + 1
+        )
+
+        # search for new key
+        i = 1
+        while True:
+            key = f"key{i:02d}"
+            if key in self.keys:
+                i += 1
+            else:
+                break
+
+        self.node.attrs[key] = "new"
+        # update model
+        self.keys.append(key)
+        self.values.append("new")
+        self.classes.append("str")
+        self.row_count += 1
+
+        self.endInsertRows()
+
+    def removeRow(self, row: int, parent: QModelIndex = ...) -> bool:
+        """remove row specified with ``row`` from the attributes"""
+        if row < self.row_count:
+            self.node.attrs.pop(self.keys[row])
+            # reload model
+            self.update_model()
 
 class DatasetTableModel(QAbstractTableModel):
 
