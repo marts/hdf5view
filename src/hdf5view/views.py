@@ -22,6 +22,8 @@ from qtpy.QtWidgets import (
     QTreeView,
     QVBoxLayout,
     QWidget,
+    QPushButton,
+    QHBoxLayout,
 )
 
 import pyqtgraph as pg
@@ -35,7 +37,62 @@ from .models import (
     ImageModel,
 )
 
+class ExtendableAttributesTableView(QWidget):
+    """
+    Extends QTableView for AttributesTableModel by adding two buttons
+    to either add or remove rows.
+    """
+    def __init__(self, hdf):
+        super().__init__()
 
+        self.hdf = hdf
+
+        self.attrs_model = AttributesTableModel(self.hdf)
+        
+        self.attrs_view = QTableView()
+        self.attrs_view.setModel(self.attrs_model)
+        self.attrs_view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.attrs_view.horizontalHeader().setStretchLastSection(True)
+        self.attrs_view.verticalHeader().hide()
+
+        self.btn_remove = QPushButton("Remove entry", self)
+        self.btn_remove.pressed.connect(self.pressed_remove)
+
+        self.btn_add = QPushButton("Add entry", self)
+        self.btn_add.pressed.connect(self.pressed_add)
+
+        # layout
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(self.btn_remove)
+        btn_row.addWidget(self.btn_add)
+        btn_row.setContentsMargins(0, 0, 0, 0)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.attrs_view)
+        layout.addLayout(btn_row)
+        layout.setContentsMargins(0, 8, 0, 8)
+
+        self.setLayout(layout)
+
+
+    def pressed_remove(self):
+        """remove all rows which are currently selected."""
+        indices = self.attrs_view.selectionModel().selectedIndexes()
+
+        rows = list(set([i.row() for i in indices]))
+        rows.sort(reverse=True)
+
+        for r in rows:
+            self.attrs_model.removeRow(r)
+
+    def pressed_add(self):
+        self.attrs_model.add_row()
+
+    def update_nodel(self, path):
+        self.attrs_model.update_node(path)
+
+    def scrollToTop(self):
+        self.attrs_view.scrollToTop()
 
 
 class HDF5Widget(QWidget):
@@ -52,7 +109,6 @@ class HDF5Widget(QWidget):
 
         # Initialise the models
         self.tree_model = TreeModel(self.hdf)
-        self.attrs_model = AttributesTableModel(self.hdf)
         self.dataset_model = DatasetTableModel(self.hdf)
         self.dims_model = DimsTableModel(self.hdf)
         self.data_model = DataTableModel(self.hdf)
@@ -70,11 +126,8 @@ class HDF5Widget(QWidget):
         self.tree_view.header().setStretchLastSection(True)
 
         # Setup attributes table view
-        self.attrs_view = QTableView()
-        self.attrs_view.setModel(self.attrs_model)
-        self.attrs_view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.attrs_view.horizontalHeader().setStretchLastSection(True)
-        self.attrs_view.verticalHeader().hide()
+        self.attrs_view = ExtendableAttributesTableView(self.hdf)
+        self.attrs_model = self.attrs_view.attrs_model
 
         # Setup dataset table view
         self.dataset_view = QTableView()
