@@ -34,20 +34,19 @@ class TreeModel(QStandardItemModel):
         self.setHorizontalHeaderLabels(['Objects', 'Attrs', 'Dataset'])
 
         # Add the root node and immediate children
-        root = self.add_node(self, self.hdf)
+        root = self.add_node(self, '/', self.hdf)
         for name, node in self.hdf.items():
-            self.add_node(root, node)
+            self.add_node(root, name, node)
 
-    def add_node(self, parent_item, node):
-        node_path = node.name
-        node_name = node_path.split('/')[-1]
+    def add_node(self, parent_item, name, node):
+        if name != '/':
+            path = f'{parent_item.data(Qt.UserRole)}/{name}'
+        else:
+            path = '/'
 
-        if not node_name:
-            node_name = node_path
-
-        tree_item = QStandardItem(node_name)
-        tree_item.setData(node_path, Qt.UserRole)
-        tree_item.setToolTip(node_path)
+        tree_item = QStandardItem(name)
+        tree_item.setData(path, Qt.UserRole)
+        tree_item.setToolTip(path)
 
         num_attrs = len(node.attrs)
         if num_attrs > 0:
@@ -91,8 +90,8 @@ class TreeModel(QStandardItemModel):
             child_node = self.hdf[path]
 
             if isinstance(child_node, h5py.Group):
-                for node in child_node.values():
-                    self.add_node(child_item, node)
+                for name, node in child_node.items():
+                    self.add_node(child_item, name, node)
 
     def handle_collapsed(self, index):
         """
