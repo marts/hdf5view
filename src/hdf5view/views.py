@@ -33,6 +33,7 @@ from .models import (
     DimsTableModel,
     TreeModel,
     ImageModel,
+    PlotModel,
 )
 
 
@@ -49,6 +50,7 @@ class HDF5Widget(QWidget):
         self.hdf = hdf
 
         self.image_views = {}
+        self.plot_views = {}
 
         # Initialise the models
         self.tree_model = TreeModel(self.hdf)
@@ -57,6 +59,7 @@ class HDF5Widget(QWidget):
         self.dims_model = DimsTableModel(self.hdf)
         self.data_model = DataTableModel(self.hdf)
         self.image_model = ImageModel(self.hdf)
+        self.plot_model = PlotModel(self.hdf)
 
         # Set up the main file tree view
         self.tree_view = QTreeView(headerHidden=False)
@@ -226,7 +229,7 @@ class HDF5Widget(QWidget):
 
     def add_image(self):
         """
-        Add an image from the hdf5 file.
+        Add a tab to view an image of a dataset in the hdf5 file.
         """
         iv = ImageView(self.image_model, self.dims_model)
 
@@ -239,6 +242,24 @@ class HDF5Widget(QWidget):
         self.tab_node[id_iv] = tree_index
 
         index = self.tabs.addTab(self.image_views[id_iv], 'Image')
+        self.tabs.setCurrentIndex(index)
+
+
+    def add_plot(self):
+        """
+        Add a tab to view an plot of a dataset in the hdf5 file.
+        """
+        pv = PlotView(self.plot_model, self.dims_model)
+
+        id_pv = id(pv)
+
+        self.plot_views[id_pv] = pv
+
+        self.tab_dims[id_pv] = list(self.dims_model.shape)
+        tree_index = self.tree_view.currentIndex()
+        self.tab_node[id_pv] = tree_index
+
+        index = self.tabs.addTab(self.plot_views[id_pv], 'Plot')
         self.tabs.setCurrentIndex(index)
 
 
@@ -255,67 +276,6 @@ class HDF5Widget(QWidget):
         widget.deleteLater()
 
 
-# class ImageWindow(QMainWindow):
-
-#     def __init__(self, title, data):
-#         super().__init__()
-
-#         self.data = data
-
-#         self.setWindowTitle(title)
-
-#         self.init_actions()
-#         self.init_menus()
-#         self.init_toolbars()
-#         self.init_central_widget()
-#         self.init_statusbar()
-
-#     def init_actions(self):
-#         """
-#         Initialise actions
-#         """
-#         self.close_action = QAction(
-#             '&Close',
-#             self,
-#             shortcut=QKeySequence.Close,
-#             statusTip='Close image',
-#             triggered=self.close,
-#         )
-
-#     def init_menus(self):
-#         """
-#         Initialise menus
-#         """
-#         menu = self.menuBar()
-
-#         # Image menu
-#         self.file_menu = menu.addMenu('&Image')
-#         self.file_menu.addAction(self.close_action)
-
-#     def init_toolbars(self):
-#         """
-#         Initialise the toobars
-#         """
-#         self.file_toolbar = self.addToolBar('Image')
-#         self.file_toolbar.setObjectName('image_toolbar')
-#         self.file_toolbar.addAction(self.close_action)
-
-#     def init_central_widget(self):
-#         """
-#         Initialise the central widget
-#         """
-#         self.image_view = ImageView(self.data)
-#         self.setCentralWidget(self.image_view)
-
-#     def init_statusbar(self):
-#         """
-#         Initialise statusbar        """
-
-#         self.status = self.statusBar()
-#         self.status.addPermanentWidget(self.image_view.position_label)
-#         self.status.addPermanentWidget(self.image_view.frame_label)
-
-
 class ImageView(QAbstractItemView):
     """
     Shows a greyscale image view of the associated ImageModel.
@@ -329,6 +289,142 @@ class ImageView(QAbstractItemView):
           Min/Max scaling
           Histogram
           Colour maps
+    """
+
+    def __init__(self, model, dims_model):
+        super().__init__()
+
+        self.setModel(model)
+        self.dims_model = dims_model
+
+        # Main graphics layout widget
+        graphics_layout_widget = pg.GraphicsLayoutWidget()
+
+        # Graphics layout widget view box
+        self.viewbox = graphics_layout_widget.addViewBox()
+        self.viewbox.setAspectLocked(True)
+        self.viewbox.invertY(True)
+
+        # Add image item to view box
+        self.image_item = pg.ImageItem(border='w')
+        self.viewbox.addItem(self.image_item)
+        self.image_item.setOpts(axisOrder="row-major")
+
+        # Create a scrollbar for moving through image frames
+        self.scrollbar = QScrollBar(Qt.Horizontal)
+
+        layout = QVBoxLayout()
+
+        layout.addWidget(graphics_layout_widget)
+        layout.addWidget(self.scrollbar)
+
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.setLayout(layout)
+
+        self.init_signals()
+
+
+    def init_signals(self):
+        self.image_item.scene().sigMouseMoved.connect(self.handle_mouse_moved)
+        self.scrollbar.valueChanged.connect(self.handle_scroll)
+
+
+    def update_image(self):
+        small = self.model().ndim == 2 and any([i == 1 for i in self.model().node.shape])
+        if self.model().ndim < 2 or small:
+            if self.viewbox.isVisible():
+                self.viewbox.setVisible(False)
+
+            if self.scrollbar.isVisible():
+                self.scrollbar.blockSignals(True)
+                self.scrollbar.setVisible(False)
+                self.scrollbar.blockSignals(False)
+
+        else:
+            if not self.viewbox.isVisible():
+                self.viewbox.setVisible(True)
+
+            self.image_item.setImage(self.model().image_view)
+
+            try:
+                if not self.scrollbar.isVisible():
+                    self.scrollbar.setVisible(True)
+
+                self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
+
+                if self.scrollbar.sliderPosition() != self.model().dims[0]:
+                    self.scrollbar.blockSignals(True)
+                    self.scrollbar.setSliderPosition(self.model().dims[0])
+                    self.scrollbar.blockSignals(False)
+
+            except TypeError:
+                if self.scrollbar.isVisible():
+                    self.scrollbar.blockSignals(True)
+                    self.scrollbar.setVisible(False)
+                    self.scrollbar.blockSignals(False)
+
+
+
+    def handle_scroll(self, value):
+        """
+        Change the image frame on scroll
+        """
+        self.dims_model.beginResetModel()
+        self.dims_model.shape[0] = str(value)
+        self.dims_model.endResetModel()
+        self.dims_model.dataChanged.emit(QModelIndex(), QModelIndex(), [])
+
+
+    def handle_mouse_moved(self, pos):
+        """
+        Update the cursor position when the mouse moves
+        in the image scene.
+        """
+        if self.image_item.image is not None and len(self.model().dims) >= 2:
+            try:
+                max_y, max_x = self.image_item.image.shape
+            except ValueError:
+                max_y, max_x, max_z = self.image_item.image.shape
+
+            scene_pos = self.viewbox.mapSceneToView(pos)
+
+            x = int(scene_pos.x())
+            y = int(scene_pos.y())
+
+            if 0 <= x < max_x and 0 <= y < max_y:
+                I = self.model().image_view[y,x]
+                msg1 = f"X={x} Y={y}, value="
+                try:
+                    msg2 = f"{I:.3e}"
+                except TypeError:
+                    try:
+                        msg2 = f"[{I[0]:.3e}, {I[1]:.3e}, {I[2]:.3e}, {I[3]:.3e}]"
+                    except IndexError:
+                        msg2 = f"[{I[0]:.3e}, {I[1]:.3e}, {I[2]:.3e}]"
+                self.window().status.showMessage(msg1 + msg2)
+                self.viewbox.setCursor(Qt.CrossCursor)
+            else:
+                self.window().status.showMessage('')
+                self.viewbox.setCursor(Qt.ArrowCursor)
+
+
+    def horizontalOffset(self):
+        return 0
+
+    def verticalOffset(self):
+        return 0
+
+    def moveCursor(self, cursorAction, modifiers):
+        return QModelIndex()
+
+
+class PlotView(QAbstractItemView):
+    """
+    Shows a plot view of the associated PlotModel.
+
+
     """
 
     def __init__(self, model, dims_model):

@@ -3,7 +3,7 @@
 import os
 import sys
 import argparse
-# import traceback
+import traceback
 
 # to force qtpy to use a particular Qt binding, uncomment the line below,
 # and set the string to your preferred binding i.e. 'pyqt5', 'pyside2',
@@ -30,16 +30,16 @@ from . import __version__
 from .mainwindow import MainWindow
 
 
-# def my_excepthook(e_type, value, tb):
-#     """
-#     Catch and print exceptions to help with debugging Qt guis.
-#     """
-#     m_1 = '\x1b[31m\x1b[1m'
-#     m_2 = f"Unhandled error: {e_type} {value} {''.join(traceback.format_tb(tb))}"
-#     m_3 = '\x1b[0m'
-#     print(m_1 + m_2 + m_3)
+def my_excepthook(e_type, value, tb):
+    """
+    Catch and print exceptions to help with debugging Qt guis.
+    """
+    m_1 = '\x1b[31m\x1b[1m'
+    m_2 = f"Unhandled error: {e_type} {value} {''.join(traceback.format_tb(tb))}"
+    m_3 = '\x1b[0m'
+    print(m_1 + m_2 + m_3)
 
-# sys.excepthook = my_excepthook
+sys.excepthook = my_excepthook
 
 
 basedir = os.path.dirname(__file__)

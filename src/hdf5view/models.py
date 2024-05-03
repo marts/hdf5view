@@ -529,6 +529,150 @@ class ImageModel(QAbstractItemModel):
         self.endResetModel()
 
 
+class PlotModel(QAbstractItemModel):
+
+    def __init__(self, hdf):
+        super().__init__()
+
+        self.hdf = hdf
+        self.node = None
+        self.row_count = 0
+        self.column_count = 0
+        self.ndim = 0
+        self.dims = ()
+        self.image_view = None
+        self.compound_names = None
+
+
+    def update_node(self, path):
+        """
+        Update the current node path
+        """
+        self.compound_names = None
+
+        self.beginResetModel()
+
+        self.row_count = 0
+        self.column_count = 0
+
+        self.dims = ()
+
+        self.node = self.hdf[path]
+
+        self.image_view = None
+
+
+        if isinstance(self.node, h5py.Dataset):
+
+            self.ndim = self.node.ndim
+
+            shape = self.node.shape
+
+            self.compound_names = self.node.dtype.names
+
+            if self.ndim == 0:
+                self.row_count = 1
+                self.column_count = 1
+
+            elif self.ndim == 1:
+                self.row_count = shape[0]
+
+                if self.compound_names:
+                    self.column_count = len(self.compound_names)
+                else:
+                    self.column_count = 1
+
+            elif self.ndim == 2:
+                self.row_count = shape[-2]
+                self.column_count = shape[-1]
+                self.dims = tuple([slice(None), slice(None)])
+                self.image_view = self.node[self.dims]
+
+            elif self.ndim > 2 and shape[-1] in [3, 4]:
+                self.row_count = shape[-3]
+                self.column_count = shape[-2]
+                self.dims = tuple(([0] * (self.ndim - 3)) + [slice(None),
+                                                             slice(None),
+                                                             slice(None)])
+                self.image_view = self.node[self.dims]
+
+            else:
+                self.row_count = shape[-2]
+                self.column_count = shape[-1]
+                self.dims = tuple(([0] * (self.ndim - 2)) + [slice(None),
+                                                             slice(None)])
+                self.image_view = self.node[self.dims]
+
+        self.endResetModel()
+
+    def parent(self, childIndex=QModelIndex()):
+        return self.createIndex()
+
+    def index(self, row, column, parentIndex=QModelIndex()):
+        return self.createIndex()
+
+    def rowCount(self, parent=QModelIndex()):
+        return self.row_count
+
+    def columnCount(self, parent=QModelIndex()):
+        return self.column_count
+
+    def headerData(self, section, orientation, role):
+        if role == Qt.DisplayRole:
+            if self.compound_names and orientation == Qt.Horizontal:
+                return self.compound_names[section]
+            else:
+                return str(section)
+
+        super().headerData(section, orientation, role)
+
+    def data(self, index, role=Qt.DisplayRole):
+        if index.isValid():
+            if role in (Qt.DisplayRole, Qt.ToolTipRole):
+                if self.ndim == 2:
+                    return self.node[index.row(), index.column()]
+
+                elif self.ndim > 2:
+                    if self.image_view.ndim >= 2:
+                        return self.image_view[index.row(), index.column()]
+
+
+    def set_dims(self, dims):
+        self.beginResetModel()
+
+        self.row_count = None
+        self.column_count = None
+        self.dims = []
+        self.image_view = None
+
+        for i, value in enumerate(dims):
+            try:
+                v = int(value)
+                self.dims.append(v)
+            except (ValueError, TypeError):
+                if ':' in value:
+                    value = value.strip()
+                    # https://stackoverflow.com/questions/680826/python-create-slice-object-from-string/23895339
+                    s = slice(*map(lambda x: int(x.strip()) if x.strip() else None, value.split(':')))
+                    self.dims.append(s)
+
+        if self.ndim == 2:
+            self.dims = [slice(None), slice(None)]
+
+        self.dims = tuple(self.dims)
+
+        if len(self.dims) >= 2:
+            self.image_view = self.node[self.dims]
+            self.row_count = self.image_view.shape[0]
+            self.column_count = self.image_view.shape[1]
+
+        else:
+            self.row_count = 1
+            self.column_count = 1
+
+        self.endResetModel()
+
+
 class DimsTableModel(QAbstractTableModel):
 
     def __init__(self, hdf):
