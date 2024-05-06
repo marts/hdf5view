@@ -441,10 +441,10 @@ class PlotView(QAbstractItemView):
         self.viewbox.setAspectLocked(True)
         self.viewbox.invertY(True)
 
-        # Add image item to view box
-        self.image_item = pg.ImageItem(border='w')
-        self.viewbox.addItem(self.image_item)
-        self.image_item.setOpts(axisOrder="row-major")
+        # Add plot item to view box
+        self.plot_item = pg.PlotItem(border='w')
+        self.viewbox.addItem(self.plot_item)
+        self.plot_item.setOpts(axisOrder="row-major")
 
         # Create a scrollbar for moving through image frames
         self.scrollbar = QScrollBar(Qt.Horizontal)
@@ -463,7 +463,7 @@ class PlotView(QAbstractItemView):
 
 
     def init_signals(self):
-        self.image_item.scene().sigMouseMoved.connect(self.handle_mouse_moved)
+        self.plot_item.scene().sigMouseMoved.connect(self.handle_mouse_moved)
         self.scrollbar.valueChanged.connect(self.handle_scroll)
 
 
@@ -482,7 +482,7 @@ class PlotView(QAbstractItemView):
             if not self.viewbox.isVisible():
                 self.viewbox.setVisible(True)
 
-            self.image_item.setImage(self.model().image_view)
+            self.plot_item.setImage(self.model().image_view)
 
             try:
                 if not self.scrollbar.isVisible():
@@ -518,11 +518,11 @@ class PlotView(QAbstractItemView):
         Update the cursor position when the mouse moves
         in the image scene.
         """
-        if self.image_item.image is not None and len(self.model().dims) >= 2:
+        if self.plot_item.image is not None and len(self.model().dims) >= 2:
             try:
-                max_y, max_x = self.image_item.image.shape
+                max_y, max_x = self.plot_item.image.shape
             except ValueError:
-                max_y, max_x, max_z = self.image_item.image.shape
+                max_y, max_x, max_z = self.plot_item.image.shape
 
             scene_pos = self.viewbox.mapSceneToView(pos)
 
