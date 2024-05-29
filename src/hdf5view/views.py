@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
+import h5py
 
 from qtpy.QtCore import (
     Qt,
     QModelIndex,
 )
 
-# from qtpy.QtGui import (
-#     QKeySequence,
-# )
+from qtpy.QtGui import (
+    QFont,
+    # QKeySequence,
+)
 
 from qtpy.QtWidgets import (
     QAbstractItemView,
@@ -168,6 +170,10 @@ class HDF5Widget(QWidget):
             self.image_model.set_dims(self.dims_model.shape)
             self.image_views[id_cw].update_image()
 
+        elif isinstance(self.tabs.currentWidget(), PlotView):
+            self.plot_model.set_dims(self.dims_model.shape)
+            self.plot_views[id_cw].update_plot()
+
         self.tab_dims[id_cw] = list(self.dims_model.shape)
 
 
@@ -190,7 +196,10 @@ class HDF5Widget(QWidget):
         self.dataset_model.update_node(path)
         self.dataset_view.scrollToTop()
 
-        self.dims_model.update_node(path)
+        self.dims_model.update_node(path,
+                                    now_on_PlotView=isinstance(self.tabs.currentWidget(),
+                                                               PlotView)
+                                    )
         self.dims_view.scrollToTop()
 
         self.data_model.update_node(path)
@@ -198,12 +207,17 @@ class HDF5Widget(QWidget):
 
         self.image_model.update_node(path)
 
+        self.plot_model.update_node(path)
+
         id_cw = id(self.tabs.currentWidget())
         self.tab_dims[id_cw] = list(self.dims_model.shape)
         self.tab_node[id_cw] = index
 
         if isinstance(self.tabs.currentWidget(), ImageView):
             self.image_views[id_cw].update_image()
+
+        if isinstance(self.tabs.currentWidget(), PlotView):
+            self.plot_views[id_cw].update_plot()
 
 
 
@@ -231,6 +245,10 @@ class HDF5Widget(QWidget):
         """
         Add a tab to view an image of a dataset in the hdf5 file.
         """
+        c_index = self.tree_view.currentIndex()
+        path = self.tree_model.itemFromIndex(c_index).data(Qt.UserRole)
+        self.dims_model.update_node(path)
+
         iv = ImageView(self.image_model, self.dims_model)
 
         id_iv = id(iv)
@@ -249,6 +267,10 @@ class HDF5Widget(QWidget):
         """
         Add a tab to view an plot of a dataset in the hdf5 file.
         """
+        c_index = self.tree_view.currentIndex()
+        path = self.tree_model.itemFromIndex(c_index).data(Qt.UserRole)
+        self.dims_model.update_node(path, now_on_PlotView=True)
+
         pv = PlotView(self.plot_model, self.dims_model)
 
         id_pv = id(pv)
@@ -297,6 +319,9 @@ class ImageView(QAbstractItemView):
         self.setModel(model)
         self.dims_model = dims_model
 
+        pg.setConfigOption('background', 'w')
+        pg.setConfigOption('foreground', 'w')
+
         # Main graphics layout widget
         graphics_layout_widget = pg.GraphicsLayoutWidget()
 
@@ -333,7 +358,7 @@ class ImageView(QAbstractItemView):
 
     def update_image(self):
         small = self.model().ndim == 2 and any([i == 1 for i in self.model().node.shape])
-        if self.model().ndim < 2 or small:
+        if self.model().ndim < 2 or small or not isinstance(self.model().node, h5py.Dataset):
             if self.viewbox.isVisible():
                 self.viewbox.setVisible(False)
 
@@ -386,7 +411,8 @@ class ImageView(QAbstractItemView):
             try:
                 max_y, max_x = self.image_item.image.shape
             except ValueError:
-                max_y, max_x, max_z = self.image_item.image.shape
+                # max_y, max_x, max_z = self.image_item.image.shape
+                max_y, max_x = self.image_item.image.shape[:2]
 
             scene_pos = self.viewbox.mapSceneToView(pos)
 
@@ -433,18 +459,15 @@ class PlotView(QAbstractItemView):
         self.setModel(model)
         self.dims_model = dims_model
 
+        pg.setConfigOptions(antialias=True)
+        pg.setConfigOption('background', 'w')
+        pg.setConfigOption('foreground', 'w')
+        pg.setConfigOption('leftButtonPan', False)
+
         # Main graphics layout widget
         graphics_layout_widget = pg.GraphicsLayoutWidget()
 
-        # Graphics layout widget view box
-        self.viewbox = graphics_layout_widget.addViewBox()
-        self.viewbox.setAspectLocked(True)
-        self.viewbox.invertY(True)
-
-        # Add plot item to view box
-        self.plot_item = pg.PlotItem(border='w')
-        self.viewbox.addItem(self.plot_item)
-        self.plot_item.setOpts(axisOrder="row-major")
+        self.plot_item = graphics_layout_widget.addPlot()
 
         # Create a scrollbar for moving through image frames
         self.scrollbar = QScrollBar(Qt.Horizontal)
@@ -467,39 +490,110 @@ class PlotView(QAbstractItemView):
         self.scrollbar.valueChanged.connect(self.handle_scroll)
 
 
-    def update_image(self):
-        small = self.model().ndim == 2 and any([i == 1 for i in self.model().node.shape])
-        if self.model().ndim < 2 or small:
-            if self.viewbox.isVisible():
-                self.viewbox.setVisible(False)
+    def update_plot(self):
+        right_type = isinstance(self.model().node, h5py.Dataset)
+        if not right_type:
+            object_dtype = True
+            right_ndim = False
+            right_shape = False
+        else:
+            object_dtype = self.model().node.dtype == 'object'
+            try:
+                right_ndim = self.model().plot_view.ndim in [1, 2]
+            except AttributeError:
+                if isinstance(self.model().plot_view, list):
+                    right_ndim = True
+            try:
+                if self.model().plot_view.ndim == 1:
+                    right_shape = True
+                else:
+                    # ndim = 2, we are plotting two columns of data against each other
+                    right_shape = self.model().plot_view.shape[-1] == 2
+            except AttributeError:
+                if isinstance(self.model().plot_view, list):
+                    right_shape = True
+
+        if not right_type or object_dtype or not right_ndim or not right_shape:
+            if self.plot_item.isVisible():
+                self.plot_item.setVisible(False)
 
             if self.scrollbar.isVisible():
                 self.scrollbar.blockSignals(True)
                 self.scrollbar.setVisible(False)
                 self.scrollbar.blockSignals(False)
 
+            return
+
+        if not self.plot_item.isVisible():
+            self.plot_item.setVisible(True)
+
+        self.plot_item.clearPlots()
+        self.plot_item.enableAutoRange()
+        self.plot_item.plot(self.model().plot_view,
+                            pen=(0,0,200),
+                            symbolBrush=(0,0,255),
+                            symbolPen='k'
+                            )
+
+        c_1 = self.model().plot_view.ndim == 2
+        s_loc = [i if isinstance(j, slice) else -1 for i, j in enumerate(self.model().dims)]
+        s_idx = [i for i in s_loc if i != -1]
+        if c_1 and len(s_idx) == 2:
+            # here we are plotting two columns of data against each other
+            q = list(range(self.model().node.shape[s_idx[1]]))[self.model().dims[s_idx[1]]]
+            w_x = list(self.dims_model.shape)
+            w_x[s_idx[1]] = str(q[0])
+            w_y = list(self.dims_model.shape)
+            w_y[s_idx[1]] = str(q[1])
+
+            x_slice = f" [{', '.join(w_x)}]"
+            x_label = f"{self.model().node.name.split('/')[-1]}{x_slice}"
+            y_slice = f" [{', '.join(w_y)}]"
+            y_label = f"{self.model().node.name.split('/')[-1]}{y_slice}"
         else:
-            if not self.viewbox.isVisible():
-                self.viewbox.setVisible(True)
+            # here only one column of data is plotted (it may be sliced)
+            x_label = 'Index'
+            y_slice = f" [{', '.join(self.dims_model.shape)}]" if not self.dims_model.shape == [":"] else ""
+            y_label = f"{self.model().node.name.split('/')[-1]}{y_slice}"
 
-            self.plot_item.setImage(self.model().image_view)
+        self.plot_item.setLabel('bottom', x_label, **{'font-size':'14pt', 'font':'Arial'})
+        self.plot_item.showAxis("top")
+        self.plot_item.setLabel('left',
+                                y_label,
+                                **{'font-size':'14pt', 'font':'Arial'})
 
-            try:
-                if not self.scrollbar.isVisible():
-                    self.scrollbar.setVisible(True)
+        self.plot_item.showAxis('right')
+        for i in ["bottom", "top", "left", "right"]:
+            ax = self.plot_item.getAxis(i)
+            ax.setPen(pg.mkPen(color='k', width=2))
+            ax.setStyle(**{"tickAlpha" : 255,
+                           "tickLength": -8})
+        for i in ["bottom", "left"]:
+            lab_font = QFont("Arial")
+            lab_font.setPointSize(11)
+            ax = self.plot_item.getAxis(i)
+            ax.setTextPen('k')
+            ax.setStyle(**{'tickFont':lab_font})
+        for i in ["top", "right"]:
+            self.plot_item.getAxis(i).setStyle(**{'showValues':False})
 
-                self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
 
-                if self.scrollbar.sliderPosition() != self.model().dims[0]:
-                    self.scrollbar.blockSignals(True)
-                    self.scrollbar.setSliderPosition(self.model().dims[0])
-                    self.scrollbar.blockSignals(False)
+        try:
+            if not self.scrollbar.isVisible():
+                self.scrollbar.setVisible(True)
 
-            except TypeError:
-                if self.scrollbar.isVisible():
-                    self.scrollbar.blockSignals(True)
-                    self.scrollbar.setVisible(False)
-                    self.scrollbar.blockSignals(False)
+            self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
+
+            if self.scrollbar.sliderPosition() != self.model().dims[0]:
+                self.scrollbar.blockSignals(True)
+                self.scrollbar.setSliderPosition(self.model().dims[0])
+                self.scrollbar.blockSignals(False)
+
+        except TypeError:
+            if self.scrollbar.isVisible():
+                self.scrollbar.blockSignals(True)
+                self.scrollbar.setVisible(False)
+                self.scrollbar.blockSignals(False)
 
 
 
@@ -518,32 +612,24 @@ class PlotView(QAbstractItemView):
         Update the cursor position when the mouse moves
         in the image scene.
         """
-        if self.plot_item.image is not None and len(self.model().dims) >= 2:
-            try:
-                max_y, max_x = self.plot_item.image.shape
-            except ValueError:
-                max_y, max_x, max_z = self.plot_item.image.shape
+        if self.plot_item is not None:
+            vb = self.plot_item.getViewBox()
+            x_lim, y_lim = vb.viewRange()
+            x_min, x_max = x_lim
+            y_min, y_max = y_lim
 
-            scene_pos = self.viewbox.mapSceneToView(pos)
+            scene_pos = vb.mapSceneToView(pos)
 
-            x = int(scene_pos.x())
-            y = int(scene_pos.y())
+            x = scene_pos.x()
+            y = scene_pos.y()
 
-            if 0 <= x < max_x and 0 <= y < max_y:
-                I = self.model().image_view[y,x]
-                msg1 = f"X={x} Y={y}, value="
-                try:
-                    msg2 = f"{I:.3e}"
-                except TypeError:
-                    try:
-                        msg2 = f"[{I[0]:.3e}, {I[1]:.3e}, {I[2]:.3e}, {I[3]:.3e}]"
-                    except IndexError:
-                        msg2 = f"[{I[0]:.3e}, {I[1]:.3e}, {I[2]:.3e}]"
-                self.window().status.showMessage(msg1 + msg2)
-                self.viewbox.setCursor(Qt.CrossCursor)
+            if x_min <= x < x_max and y_min <= y < y_max:
+                msg1 = f"X={x:.3e} Y={y:.3e}"
+                self.window().status.showMessage(msg1)
+                vb.setCursor(Qt.CrossCursor)
             else:
                 self.window().status.showMessage('')
-                self.viewbox.setCursor(Qt.ArrowCursor)
+                vb.setCursor(Qt.ArrowCursor)
 
 
     def horizontalOffset(self):

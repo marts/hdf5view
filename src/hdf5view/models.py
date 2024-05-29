@@ -540,7 +540,7 @@ class PlotModel(QAbstractItemModel):
         self.column_count = 0
         self.ndim = 0
         self.dims = ()
-        self.image_view = None
+        self.plot_view = None
         self.compound_names = None
 
 
@@ -559,49 +559,53 @@ class PlotModel(QAbstractItemModel):
 
         self.node = self.hdf[path]
 
-        self.image_view = None
+        self.plot_view = None
 
+        if not isinstance(self.node, h5py.Dataset) or self.node.dtype == 'object':
+            self.endResetModel()
+            return
 
-        if isinstance(self.node, h5py.Dataset):
+        self.ndim = self.node.ndim
 
-            self.ndim = self.node.ndim
+        shape = self.node.shape
 
-            shape = self.node.shape
+        self.compound_names = self.node.dtype.names
 
-            self.compound_names = self.node.dtype.names
+        if self.ndim == 0:
+            self.row_count = 1
+            self.column_count = 1
 
-            if self.ndim == 0:
-                self.row_count = 1
+        elif self.ndim == 1:
+            self.row_count = shape[0]
+
+            if self.compound_names:
+                self.column_count = len(self.compound_names)
+            else:
                 self.column_count = 1
 
-            elif self.ndim == 1:
-                self.row_count = shape[0]
+            self.dims = tuple([slice(None)])
+            self.plot_view = self.node[self.dims]
 
-                if self.compound_names:
-                    self.column_count = len(self.compound_names)
-                else:
-                    self.column_count = 1
+        elif self.ndim == 2:
+            self.row_count = shape[-2]
+            self.column_count = 1
+            self.dims = tuple([slice(None), 0])
+            self.plot_view = self.node[self.dims]
 
-            elif self.ndim == 2:
-                self.row_count = shape[-2]
-                self.column_count = shape[-1]
-                self.dims = tuple([slice(None), slice(None)])
-                self.image_view = self.node[self.dims]
+        elif self.ndim > 2 and shape[-1] in [3, 4]:
+            self.row_count = shape[-3]
+            self.column_count = 1 # shape[-2]
+            self.dims = tuple(([0] * (self.ndim - 3)) + [slice(None),
+                                                         0,
+                                                         0])
+            self.plot_view = self.node[self.dims]
 
-            elif self.ndim > 2 and shape[-1] in [3, 4]:
-                self.row_count = shape[-3]
-                self.column_count = shape[-2]
-                self.dims = tuple(([0] * (self.ndim - 3)) + [slice(None),
-                                                             slice(None),
-                                                             slice(None)])
-                self.image_view = self.node[self.dims]
-
-            else:
-                self.row_count = shape[-2]
-                self.column_count = shape[-1]
-                self.dims = tuple(([0] * (self.ndim - 2)) + [slice(None),
-                                                             slice(None)])
-                self.image_view = self.node[self.dims]
+        else:
+            self.row_count = shape[-2]
+            self.column_count = 1 # shape[-1]
+            self.dims = tuple(([0] * (self.ndim - 2)) + [slice(None),
+                                                         0])
+            self.plot_view = self.node[self.dims]
 
         self.endResetModel()
 
@@ -629,12 +633,15 @@ class PlotModel(QAbstractItemModel):
     def data(self, index, role=Qt.DisplayRole):
         if index.isValid():
             if role in (Qt.DisplayRole, Qt.ToolTipRole):
-                if self.ndim == 2:
+                if self.ndim == 1:
+                    return self.node[index.row()]
+
+                elif self.ndim == 2:
                     return self.node[index.row(), index.column()]
 
                 elif self.ndim > 2:
-                    if self.image_view.ndim >= 2:
-                        return self.image_view[index.row(), index.column()]
+                    if self.plot_view.ndim >= 2:
+                        return self.plot_view[index.row(), index.column()]
 
 
     def set_dims(self, dims):
@@ -643,7 +650,7 @@ class PlotModel(QAbstractItemModel):
         self.row_count = None
         self.column_count = None
         self.dims = []
-        self.image_view = None
+        self.plot_view = None
 
         for i, value in enumerate(dims):
             try:
@@ -656,19 +663,16 @@ class PlotModel(QAbstractItemModel):
                     s = slice(*map(lambda x: int(x.strip()) if x.strip() else None, value.split(':')))
                     self.dims.append(s)
 
-        if self.ndim == 2:
-            self.dims = [slice(None), slice(None)]
-
         self.dims = tuple(self.dims)
 
-        if len(self.dims) >= 2:
-            self.image_view = self.node[self.dims]
-            self.row_count = self.image_view.shape[0]
-            self.column_count = self.image_view.shape[1]
-
-        else:
+        if not any(isinstance(i, slice) for i in self.dims):
+            self.plot_view = [self.node[self.dims]]
             self.row_count = 1
-            self.column_count = 1
+        else:
+            self.plot_view = self.node[self.dims]
+            self.row_count = self.plot_view.shape[0]
+
+        self.column_count = 1
 
         self.endResetModel()
 
@@ -684,7 +688,7 @@ class DimsTableModel(QAbstractTableModel):
         self.row_count = 1
         self.shape = ()
 
-    def update_node(self, path):
+    def update_node(self, path, now_on_PlotView=False):
         """
         Update the current node path
         """
@@ -694,14 +698,33 @@ class DimsTableModel(QAbstractTableModel):
         self.beginResetModel()
         self.node = self.hdf[path]
 
-        if isinstance(self.node, h5py.Dataset) and self.node.ndim > 2:
+        if not isinstance(self.node, h5py.Dataset) or self.node.dtype == 'object':
+            self.endResetModel()
+            return
+
+        if self.node.ndim == 1:
+            self.shape = [':']
+            self.column_count = len(self.shape)
+
+        elif self.node.ndim == 2:
+            self.shape = [':', ':']
+            self.column_count = len(self.shape)
+            if now_on_PlotView:
+                self.shape[-1] = '0'
+
+        elif self.node.ndim > 2:
             if self.node.shape[-1] in [3, 4]:
                 self.shape = (['0'] * (self.node.ndim - 3)) + [':', ':', ':']
                 self.column_count = len(self.shape)
+                if now_on_PlotView:
+                    self.shape[-2] = '0'
+                    self.shape[-1] = '0'
 
             else:
                 self.shape = (['0'] * (self.node.ndim - 2)) + [':', ':']
                 self.column_count = len(self.shape)
+                if now_on_PlotView:
+                    self.shape[-1] = '0'
 
         self.endResetModel()
 
