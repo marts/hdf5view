@@ -187,9 +187,11 @@ class DatasetTableModel(QAbstractTableModel):
             )
 
             self.values = (
-                str(self.node.name), str(self.node.dtype), str(self.node.ndim), str(self.node.shape),
-                str(self.node.maxshape), str(self.node.chunks), str(self.node.compression), str(self.node.shuffle),
-                str(self.node.fletcher32), str(self.node.scaleoffset),
+                str(self.node.name), str(self.node.dtype), str(self.node.ndim),
+                str(self.node.shape), str(self.node.maxshape),
+                str(self.node.chunks), str(self.node.compression),
+                str(self.node.shuffle), str(self.node.fletcher32),
+                str(self.node.scaleoffset),
             )
 
         self.row_count = len(self.keys)
@@ -250,45 +252,47 @@ class DataTableModel(QAbstractTableModel):
 
         self.node = self.hdf[path]
 
-        if isinstance(self.node, h5py.Dataset):
+        if not isinstance(self.node, h5py.Dataset):
+            self.endResetModel()
+            return
 
-            self.ndim = self.node.ndim
+        self.ndim = self.node.ndim
 
-            shape = self.node.shape
+        shape = self.node.shape
 
-            self.compound_names = self.node.dtype.names
+        self.compound_names = self.node.dtype.names
 
-            if self.ndim == 0:
-                self.row_count = 1
+        if self.ndim == 0:
+            self.row_count = 1
+            self.column_count = 1
+
+        elif self.ndim == 1:
+            self.row_count = shape[0]
+
+            if self.compound_names:
+                self.column_count = len(self.compound_names)
+            else:
                 self.column_count = 1
 
-            elif self.ndim == 1:
-                self.row_count = shape[0]
+        elif self.ndim == 2:
+            self.row_count = shape[-2]
+            self.column_count = shape[-1]
+            self.dims = tuple([slice(None), slice(None)])
+            self.data_view = self.node[self.dims]
 
-                if self.compound_names:
-                    self.column_count = len(self.compound_names)
-                else:
-                    self.column_count = 1
+        elif self.ndim > 2 and shape[-1] in [3, 4]:
+            self.row_count = shape[-3]
+            self.column_count = shape[-2]
+            self.dims = tuple(([0] * (self.ndim - 3)) + [slice(None),
+                                                         slice(None),
+                                                         slice(None)])
+            self.data_view = self.node[self.dims]
 
-            elif self.ndim == 2:
-                self.row_count = shape[-2]
-                self.column_count = shape[-1]
-                self.dims = tuple([slice(None), slice(None)])
-                self.data_view = self.node[self.dims]
-
-            elif self.ndim > 2 and shape[-1] in [3, 4]:
-                self.row_count = shape[-3]
-                self.column_count = shape[-2]
-                self.dims = tuple(([0] * (self.ndim - 3)) + [slice(None),
-                                                             slice(None),
-                                                             slice(None)])
-                self.data_view = self.node[self.dims]
-
-            else:
-                self.row_count = shape[-2]
-                self.column_count = shape[-1]
-                self.dims = tuple(([0] * (self.ndim - 2)) + [slice(None), slice(None)])
-                self.data_view = self.node[self.dims]
+        else:
+            self.row_count = shape[-2]
+            self.column_count = shape[-1]
+            self.dims = tuple(([0] * (self.ndim - 2)) + [slice(None), slice(None)])
+            self.data_view = self.node[self.dims]
 
         self.endResetModel()
 
@@ -417,47 +421,48 @@ class ImageModel(QAbstractItemModel):
 
         self.image_view = None
 
+        if not isinstance(self.node, h5py.Dataset) or self.node.dtype == 'object':
+            self.endResetModel()
+            return
 
-        if isinstance(self.node, h5py.Dataset):
+        self.ndim = self.node.ndim
 
-            self.ndim = self.node.ndim
+        shape = self.node.shape
 
-            shape = self.node.shape
+        self.compound_names = self.node.dtype.names
 
-            self.compound_names = self.node.dtype.names
+        if self.ndim == 0:
+            self.row_count = 1
+            self.column_count = 1
 
-            if self.ndim == 0:
-                self.row_count = 1
+        elif self.ndim == 1:
+            self.row_count = shape[0]
+
+            if self.compound_names:
+                self.column_count = len(self.compound_names)
+            else:
                 self.column_count = 1
 
-            elif self.ndim == 1:
-                self.row_count = shape[0]
+        elif self.ndim == 2:
+            self.row_count = shape[-2]
+            self.column_count = shape[-1]
+            self.dims = tuple([slice(None), slice(None)])
+            self.image_view = self.node[self.dims]
 
-                if self.compound_names:
-                    self.column_count = len(self.compound_names)
-                else:
-                    self.column_count = 1
+        elif self.ndim > 2 and shape[-1] in [3, 4]:
+            self.row_count = shape[-3]
+            self.column_count = shape[-2]
+            self.dims = tuple(([0] * (self.ndim - 3)) + [slice(None),
+                                                         slice(None),
+                                                         slice(None)])
+            self.image_view = self.node[self.dims]
 
-            elif self.ndim == 2:
-                self.row_count = shape[-2]
-                self.column_count = shape[-1]
-                self.dims = tuple([slice(None), slice(None)])
-                self.image_view = self.node[self.dims]
-
-            elif self.ndim > 2 and shape[-1] in [3, 4]:
-                self.row_count = shape[-3]
-                self.column_count = shape[-2]
-                self.dims = tuple(([0] * (self.ndim - 3)) + [slice(None),
-                                                             slice(None),
-                                                             slice(None)])
-                self.image_view = self.node[self.dims]
-
-            else:
-                self.row_count = shape[-2]
-                self.column_count = shape[-1]
-                self.dims = tuple(([0] * (self.ndim - 2)) + [slice(None),
-                                                             slice(None)])
-                self.image_view = self.node[self.dims]
+        else:
+            self.row_count = shape[-2]
+            self.column_count = shape[-1]
+            self.dims = tuple(([0] * (self.ndim - 2)) + [slice(None),
+                                                         slice(None)])
+            self.image_view = self.node[self.dims]
 
         self.endResetModel()
 
@@ -564,6 +569,7 @@ class PlotModel(QAbstractItemModel):
         if not isinstance(self.node, h5py.Dataset) or self.node.dtype == 'object':
             self.endResetModel()
             return
+
 
         self.ndim = self.node.ndim
 

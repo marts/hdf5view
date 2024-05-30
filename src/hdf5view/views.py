@@ -357,8 +357,19 @@ class ImageView(QAbstractItemView):
 
 
     def update_image(self):
-        small = self.model().ndim == 2 and any([i == 1 for i in self.model().node.shape])
-        if self.model().ndim < 2 or small or not isinstance(self.model().node, h5py.Dataset):
+        right_type = isinstance(self.model().node, h5py.Dataset)
+        if not right_type:
+            object_dtype = True
+            right_ndim = False
+            small = True
+
+
+        else:
+            object_dtype = self.model().node.dtype == 'object'
+            right_ndim = self.model().ndim >= 2
+            small = self.model().ndim == 2 and any([i == 1 for i in self.model().node.shape])
+
+        if not right_type or object_dtype or not right_ndim or small:
             if self.viewbox.isVisible():
                 self.viewbox.setVisible(False)
 
