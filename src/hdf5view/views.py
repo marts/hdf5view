@@ -362,8 +362,6 @@ class ImageView(QAbstractItemView):
             object_dtype = True
             right_ndim = False
             small = True
-
-
         else:
             object_dtype = self.model().node.dtype == 'object'
             right_ndim = self.model().ndim >= 2

@@ -274,11 +274,12 @@ class DataTableModel(QAbstractTableModel):
             else:
                 self.column_count = 1
 
+            self.dims = tuple([slice(None)])
+
         elif self.ndim == 2:
             self.row_count = shape[-2]
             self.column_count = shape[-1]
             self.dims = tuple([slice(None), slice(None)])
-            self.data_view = self.node[self.dims]
 
         elif self.ndim > 2 and shape[-1] in [3, 4]:
             self.row_count = shape[-3]
@@ -286,14 +287,13 @@ class DataTableModel(QAbstractTableModel):
             self.dims = tuple(([0] * (self.ndim - 3)) + [slice(None),
                                                          slice(None),
                                                          slice(None)])
-            self.data_view = self.node[self.dims]
 
         else:
             self.row_count = shape[-2]
             self.column_count = shape[-1]
             self.dims = tuple(([0] * (self.ndim - 2)) + [slice(None), slice(None)])
-            self.data_view = self.node[self.dims]
 
+        self.data_view = self.node[self.dims]
         self.endResetModel()
 
     def rowCount(self, parent=QModelIndex()):
@@ -315,38 +315,42 @@ class DataTableModel(QAbstractTableModel):
     def data(self, index, role=Qt.DisplayRole):
         if index.isValid():
             if role in (Qt.DisplayRole, Qt.ToolTipRole):
-                if self.ndim == 0:
-                    try:
-                        q = str(self.node.asstr()[...])
-                    except TypeError:
-                        q = str(self.node[...])
-
-                elif self.ndim == 1:
-                    if self.compound_names:
-                        name = self.compound_names[index.column()]
+                if self.compound_names:
+                    name = self.compound_names[index.column()]
+                    if self.data_view.ndim == 0:
                         try:
-                            q = self.node[index.row(), name].decode()
+                            q = self.data_view[name].decode()
                         except AttributeError:
-                            q = str(self.node[index.row(), name])
+                            q = str(self.data_view[name])
                     else:
                         try:
-                            q = self.node[index.row()].decode()
+                            q = self.data_view[index.row()][name].decode()
                         except AttributeError:
-                            q = str(self.node[index.row()])
+                            q = str(self.data_view[index.row()][name])
 
-                elif self.ndim == 2:
+                    return q
+
+                if self.ndim == 0:
                     try:
-                        q = self.node[index.row(), index.column()].decode()
-                    except AttributeError:
-                        q = str(self.node[index.row(), index.column()])
-
-                elif self.ndim > 2:
-                    if self.data_view.ndim == 0:
+                        q = self.data_view.decode()
+                    except TypeError:
                         q = str(self.data_view)
+                else:
+                    if self.data_view.ndim == 0:
+                        try:
+                            q = self.data_view.decode()
+                        except AttributeError:
+                            q = str(self.data_view)
                     elif self.data_view.ndim == 1:
-                        q = str(self.data_view[index.row()])
+                        try:
+                            q = self.data_view[index.row()].decode()
+                        except AttributeError:
+                            q = str(self.data_view[index.row()])
                     elif self.data_view.ndim >= 2:
-                        q = str(self.data_view[index.row(), index.column()])
+                        try:
+                            q = self.data_view[index.row(), index.column()].decode()
+                        except AttributeError:
+                            q = str(self.data_view[index.row(), index.column()])
 
                 return q
 
@@ -381,10 +385,14 @@ class DataTableModel(QAbstractTableModel):
         except IndexError:
             self.row_count = 1
 
-        try:
-            self.column_count = self.data_view.shape[1]
-        except IndexError:
-            self.column_count = 1
+        if self.compound_names:
+            self.column_count = len(self.compound_names)
+        else:
+            try:
+                self.column_count = self.data_view.shape[1]
+            except IndexError:
+                self.column_count = 1
+
 
         self.endResetModel()
 
