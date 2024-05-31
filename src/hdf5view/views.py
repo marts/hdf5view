@@ -249,6 +249,7 @@ class HDF5Widget(QWidget):
         path = self.tree_model.itemFromIndex(c_index).data(Qt.UserRole)
         self.dims_model.update_node(path)
 
+
         iv = ImageView(self.image_model, self.dims_model)
 
         id_iv = id(iv)

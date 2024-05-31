@@ -17,11 +17,6 @@ from qtpy.QtGui import (
     QStandardItemModel,
 )
 
-from qtpy.QtWidgets import (
-    QComboBox,
-    QStyledItemDelegate,
-)
-
 
 
 class TreeModel(QStandardItemModel):
@@ -498,10 +493,7 @@ class ImageModel(QAbstractItemModel):
     def data(self, index, role=Qt.DisplayRole):
         if index.isValid():
             if role in (Qt.DisplayRole, Qt.ToolTipRole):
-                if self.ndim == 2:
-                    return self.node[index.row(), index.column()]
-
-                elif self.ndim > 2:
+                if self.ndim >= 2:
                     if self.image_view.ndim >= 2:
                         return self.image_view[index.row(), index.column()]
 
@@ -524,9 +516,6 @@ class ImageModel(QAbstractItemModel):
                     # https://stackoverflow.com/questions/680826/python-create-slice-object-from-string/23895339
                     s = slice(*map(lambda x: int(x.strip()) if x.strip() else None, value.split(':')))
                     self.dims.append(s)
-
-        if self.ndim == 2:
-            self.dims = [slice(None), slice(None)]
 
         self.dims = tuple(self.dims)
 
@@ -718,11 +707,11 @@ class DimsTableModel(QAbstractTableModel):
 
         if self.node.ndim == 1:
             self.shape = [':']
-            self.column_count = len(self.shape)
+            self.column_count = 1
 
         elif self.node.ndim == 2:
             self.shape = [':', ':']
-            self.column_count = len(self.shape)
+            self.column_count = 2
             if now_on_PlotView:
                 self.shape[-1] = '0'
 
@@ -789,38 +778,3 @@ class DimsTableModel(QAbstractTableModel):
             return True
 
         return False
-
-
-# class ComboBoxItemDelegate(QStyledItemDelegate):
-
-#     def __init__(self, parent=None):
-#         super().__init__(parent)
-
-#     def createEditor(self, parent, option, index):
-#         row = index.row()
-
-#         model = index.model()
-#         max_value = model.node.shape[row]
-
-#         # Create the combobox and populate it
-#         cb = QComboBox(parent)
-#         for i in range(max_value):
-#             cb.addItem(str(i))
-#         cb.addItem(':')
-
-#         return cb
-
-#     def setEditorData(self, editor, index):
-#         cb = editor
-
-#         # Get the index of the text in the combobox that
-#         # matches the current value of the item
-#         currentText = index.data(Qt.DisplayRole)
-#         cbIndex = cb.findText(currentText)
-
-#         if cbIndex != -1:
-#             cb.setCurrentIndex(cbIndex)
-
-#     def setModelData(self, editor, model, index):
-#         cb = editor
-#         model.setData(index, cb.currentText(), Qt.EditRole)
