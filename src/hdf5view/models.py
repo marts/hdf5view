@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+"""
+This module contains the various models used in the Qt model-view
+methodology.
+"""
+
 import h5py
 import qtpy
 
@@ -6,6 +11,7 @@ from qtpy.QtCore import (
     QAbstractTableModel,
     QAbstractItemModel,
     QModelIndex,
+    QVariant,
     Qt,
 )
 
@@ -20,6 +26,9 @@ from qtpy.QtGui import (
 
 
 class TreeModel(QStandardItemModel):
+    """
+    Tree model showing the structure of the HDF5 file.
+    """
 
     def __init__(self, hdf):
         super().__init__()
@@ -97,7 +106,10 @@ class TreeModel(QStandardItemModel):
 
 
 class AttributesTableModel(QAbstractTableModel):
-
+    """
+    Model containing any attributes of a dataset in
+    the HDF5 file.
+    """
     HEADERS = ('Name', 'Value', 'Type')
 
     def __init__(self, hdf):
@@ -153,7 +165,13 @@ class AttributesTableModel(QAbstractTableModel):
 
 
 class DatasetTableModel(QAbstractTableModel):
-
+    """
+    Model containing various descriptors of the
+    dataset in the HDF5 file, currently these are:
+    'name', 'dtype', 'ndim', 'shape', 'maxshape',
+    'chunks', 'compression', 'shuffle', 'fletcher32'
+    and 'scaleoffset'.
+    """
     HEADERS = ('Name', 'Value')
 
     def __init__(self, hdf):
@@ -219,6 +237,9 @@ class DatasetTableModel(QAbstractTableModel):
 
 
 class DataTableModel(QAbstractTableModel):
+    """
+    Model containing the data in the dataset in the HDF5 file.
+    """
 
     def __init__(self, hdf):
         super().__init__()
@@ -351,7 +372,11 @@ class DataTableModel(QAbstractTableModel):
 
 
     def set_dims(self, dims):
-
+        """
+        This function is called if the dimensions in the
+        HDF5Widget.dims_view are edited. The dimensions of
+        the model are updated to match the input dimensions.
+        """
         self.beginResetModel()
 
         self.row_count = None
@@ -360,19 +385,7 @@ class DataTableModel(QAbstractTableModel):
         self.dims = []
         self.shape = self.node.shape
 
-        for i, value in enumerate(dims):
-
-            try:
-                v = int(value)
-                self.dims.append(v)
-            except (ValueError, TypeError):
-                if ':' in value:
-                    value = value.strip()
-                    # https://stackoverflow.com/questions/680826/python-create-slice-object-from-string/23895339
-                    s = slice(*map(lambda x: int(x.strip()) if x.strip() else None, value.split(':')))
-                    self.dims.append(s)
-
-        self.dims = tuple(self.dims)
+        self.dims = get_dims_from_str(dims)
         self.data_view = self.node[self.dims]
 
         try:
@@ -388,12 +401,14 @@ class DataTableModel(QAbstractTableModel):
             except IndexError:
                 self.column_count = 1
 
-
         self.endResetModel()
 
 
 class ImageModel(QAbstractItemModel):
-
+    """
+    Model containing data from the dataset in the HDF5 file,
+    in a form suitable for plotting as an image.
+    """
     def __init__(self, hdf):
         super().__init__()
 
@@ -491,14 +506,23 @@ class ImageModel(QAbstractItemModel):
         super().headerData(section, orientation, role)
 
     def data(self, index, role=Qt.DisplayRole):
+        """
+        This function must be implemented when subclassing
+        QAbstractItemModel. As the ImageView class does not need
+        this function, a default QVariant() is returned, as
+        recommended in the docs.
+        """
         if index.isValid():
             if role in (Qt.DisplayRole, Qt.ToolTipRole):
-                if self.ndim >= 2:
-                    if self.image_view.ndim >= 2:
-                        return self.image_view[index.row(), index.column()]
+                return QVariant()
 
 
     def set_dims(self, dims):
+        """
+        This function is called if the dimensions in the
+        HDF5Widget.dims_view are edited. The dimensions of
+        the model are updated to match the input dimensions.
+        """
         self.beginResetModel()
 
         self.row_count = None
@@ -506,23 +530,23 @@ class ImageModel(QAbstractItemModel):
         self.dims = []
         self.image_view = None
 
-        for i, value in enumerate(dims):
-            try:
-                v = int(value)
-                self.dims.append(v)
-            except (ValueError, TypeError):
-                if ':' in value:
-                    value = value.strip()
-                    # https://stackoverflow.com/questions/680826/python-create-slice-object-from-string/23895339
-                    s = slice(*map(lambda x: int(x.strip()) if x.strip() else None, value.split(':')))
-                    self.dims.append(s)
+        self.dims = get_dims_from_str(dims)
 
-        self.dims = tuple(self.dims)
-
-        if len(self.dims) >= 2:
+        if len(self.dims) >= 2 and not self.node.dtype == 'object':
             self.image_view = self.node[self.dims]
-            self.row_count = self.image_view.shape[0]
-            self.column_count = self.image_view.shape[1]
+            shape = self.image_view.shape
+            if self.image_view.ndim == 2:
+                self.row_count = shape[-2]
+                self.column_count = shape[-1]
+
+            elif self.image_view.ndim == 3 and shape[-1] in [3, 4]:
+                self.row_count = shape[-3]
+                self.column_count = shape[-2]
+
+            else:
+                self.image_view = None
+                self.row_count = 1
+                self.column_count = 1
 
         else:
             self.row_count = 1
@@ -532,7 +556,11 @@ class ImageModel(QAbstractItemModel):
 
 
 class PlotModel(QAbstractItemModel):
-
+    """
+    Model containing data from a dataset of the HDF5 file,
+    in a form suitable for plotting as y(x), where x is
+    usually an index.
+    """
     def __init__(self, hdf):
         super().__init__()
 
@@ -567,7 +595,6 @@ class PlotModel(QAbstractItemModel):
             self.endResetModel()
             return
 
-
         self.ndim = self.node.ndim
 
         shape = self.node.shape
@@ -583,9 +610,10 @@ class PlotModel(QAbstractItemModel):
 
             if self.compound_names:
                 self.column_count = len(self.compound_names)
-            else:
-                self.column_count = 1
+                self.endResetModel()
+                return
 
+            self.column_count = 1
             self.dims = tuple([slice(None)])
             self.plot_view = self.node[self.dims]
 
@@ -634,20 +662,23 @@ class PlotModel(QAbstractItemModel):
         super().headerData(section, orientation, role)
 
     def data(self, index, role=Qt.DisplayRole):
+        """
+        This function must be implemented when subclassing
+        QAbstractItemModel. As the PlotView class does not need
+        this function, a default QVariant() is returned, as
+        recommended in the docs.
+        """
         if index.isValid():
             if role in (Qt.DisplayRole, Qt.ToolTipRole):
-                if self.ndim == 1:
-                    return self.node[index.row()]
-
-                elif self.ndim == 2:
-                    return self.node[index.row(), index.column()]
-
-                elif self.ndim > 2:
-                    if self.plot_view.ndim >= 2:
-                        return self.plot_view[index.row(), index.column()]
+                return QVariant()
 
 
     def set_dims(self, dims):
+        """
+        This function is called if the dimensions in the
+        HDF5Widget.dims_view are edited. The dimensions of
+        the model are updated to match the input dimensions.
+        """
         self.beginResetModel()
 
         self.row_count = None
@@ -655,33 +686,41 @@ class PlotModel(QAbstractItemModel):
         self.dims = []
         self.plot_view = None
 
-        for i, value in enumerate(dims):
-            try:
-                v = int(value)
-                self.dims.append(v)
-            except (ValueError, TypeError):
-                if ':' in value:
-                    value = value.strip()
-                    # https://stackoverflow.com/questions/680826/python-create-slice-object-from-string/23895339
-                    s = slice(*map(lambda x: int(x.strip()) if x.strip() else None, value.split(':')))
-                    self.dims.append(s)
+        self.dims = get_dims_from_str(dims)
 
-        self.dims = tuple(self.dims)
+        if len(self.dims) >= 1 and not self.node.dtype == 'object' and not self.compound_names:
+            if not any(isinstance(i, slice) for i in self.dims):
+                self.row_count = 1
+                self.column_count = 1
+            else:
+                self.plot_view = self.node[self.dims]
+                shape = self.plot_view.shape
+                self.row_count = shape[0]
 
-        if not any(isinstance(i, slice) for i in self.dims):
-            self.plot_view = [self.node[self.dims]]
-            self.row_count = 1
+                if self.plot_view.ndim == 1:
+                    self.column_count = 1
+
+                elif self.plot_view.ndim == 2 and shape[-1] == 2:
+                    self.column_count = 2
+
+                else:
+                    self.plot_view = None
+                    self.column_count = 1
+
         else:
-            self.plot_view = self.node[self.dims]
-            self.row_count = self.plot_view.shape[0]
-
-        self.column_count = 1
+            self.row_count = 1
+            self.column_count = 1
 
         self.endResetModel()
 
 
 class DimsTableModel(QAbstractTableModel):
-
+    """
+    Model containing the current dimensions of the dataset.
+    This model is editable, allowing the user to change
+    the indexing of the dataset and therefore view
+    different slices.
+    """
     def __init__(self, hdf):
         super().__init__()
 
@@ -778,3 +817,44 @@ class DimsTableModel(QAbstractTableModel):
             return True
 
         return False
+
+
+def get_dims_from_str(dims_as_str):
+    """
+    Takes a tuple of strings describing the desired dimensions
+    input by the user into the hdf5widget.dims_view and turns it
+    into a tuple of ints and/or slices, which can be used to
+    index the dataset at the node.
+
+    The method to create slices from strings is given here:
+    https://stackoverflow.com/questions/680826/python-create-slice-object-from-string/23895339
+
+    Parameters
+    ----------
+    dims_as_str : Tuple
+        Tuple of strings describing the dimensions (dims)
+        e.g. ("0", "0", ":") or ("2:6:2", ":", "2", "3")
+
+    Returns
+    -------
+    dims : Tuple
+       Tuple of ints and/or slices to be used as an indexing object
+       for array indexing, e.g. (0, 0, slice(None)) or
+       (slice(2, 6, 2), slice(none), 2, 3), corresponding to the two
+       examples given above for dims_as_str
+
+    """
+    dims = []
+    for i, value in enumerate(dims_as_str):
+        try:
+            v = int(value)
+            dims.append(v)
+        except (ValueError, TypeError):
+            if ':' in value:
+                value = value.strip()
+                s = slice(*map(lambda x: int(x.strip()) if x.strip() else None, value.split(':')))
+                dims.append(s)
+
+    dims = tuple(dims)
+
+    return dims

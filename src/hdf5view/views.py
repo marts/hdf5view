@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
-import h5py
-
+"""
+This module contains the main HDF5 container widget and implementations
+of QAbstractItemView (ImageView and PlotView), which allow images
+and y(x) plots to be shown.
+"""
 from qtpy.QtCore import (
     Qt,
     QModelIndex,
@@ -45,7 +48,6 @@ class HDF5Widget(QWidget):
     """
     Main HDF5 view container widget
     """
-
     def __init__(self, hdf):
         super().__init__()
 
@@ -233,10 +235,8 @@ class HDF5Widget(QWidget):
         if c_index != o_index:
             self.tree_view.setCurrentIndex(o_index)
 
-        self.tab_dims[id(self.tabs.currentWidget())] = o_slice
-
         self.dims_model.beginResetModel()
-        self.dims_model.shape = list(self.tab_dims[id(self.tabs.currentWidget())])
+        self.dims_model.shape = o_slice
         self.dims_model.endResetModel()
         self.dims_model.dataChanged.emit(QModelIndex(), QModelIndex(), [])
 
@@ -245,15 +245,15 @@ class HDF5Widget(QWidget):
         """
         Add a tab to view an image of a dataset in the hdf5 file.
         """
-        c_index = self.tree_view.currentIndex()
+        c_index = self.tab_node[id(self.tabs.currentWidget())]
         path = self.tree_model.itemFromIndex(c_index).data(Qt.UserRole)
         self.dims_model.update_node(path)
-
+        self.image_model.update_node(path)
 
         iv = ImageView(self.image_model, self.dims_model)
+        iv.update_image()
 
         id_iv = id(iv)
-
         self.image_views[id_iv] = iv
 
         self.tab_dims[id_iv] = list(self.dims_model.shape)
@@ -261,18 +261,23 @@ class HDF5Widget(QWidget):
         self.tab_node[id_iv] = tree_index
 
         index = self.tabs.addTab(self.image_views[id_iv], 'Image')
+        self.tabs.blockSignals(True)
         self.tabs.setCurrentIndex(index)
+        self.tabs.blockSignals(False)
+
 
 
     def add_plot(self):
         """
         Add a tab to view an plot of a dataset in the hdf5 file.
         """
-        c_index = self.tree_view.currentIndex()
+        c_index = self.tab_node[id(self.tabs.currentWidget())]
         path = self.tree_model.itemFromIndex(c_index).data(Qt.UserRole)
         self.dims_model.update_node(path, now_on_PlotView=True)
+        self.plot_model.update_node(path)
 
         pv = PlotView(self.plot_model, self.dims_model)
+        pv.update_plot()
 
         id_pv = id(pv)
 
@@ -283,7 +288,9 @@ class HDF5Widget(QWidget):
         self.tab_node[id_pv] = tree_index
 
         index = self.tabs.addTab(self.plot_views[id_pv], 'Plot')
+        self.tabs.blockSignals(True)
         self.tabs.setCurrentIndex(index)
+        self.tabs.blockSignals(False)
 
 
     def handle_close_tab(self, index):
@@ -301,7 +308,7 @@ class HDF5Widget(QWidget):
 
 class ImageView(QAbstractItemView):
     """
-    Shows a greyscale image view of the associated ImageModel.
+    Shows a greyscale or rgb(a) image view of the associated ImageModel.
 
     If the node of the hdf5 file has ndim > 2, the image shown can be
     changed by changing the slice (DimsTableModel). A scrollbar is
@@ -358,17 +365,7 @@ class ImageView(QAbstractItemView):
 
 
     def update_image(self):
-        right_type = isinstance(self.model().node, h5py.Dataset)
-        if not right_type:
-            object_dtype = True
-            right_ndim = False
-            small = True
-        else:
-            object_dtype = self.model().node.dtype == 'object'
-            right_ndim = self.model().ndim >= 2
-            small = self.model().ndim == 2 and any([i == 1 for i in self.model().node.shape])
-
-        if not right_type or object_dtype or not right_ndim or small:
+        if isinstance(self.model().image_view, type(None)):
             if self.viewbox.isVisible():
                 self.viewbox.setVisible(False)
 
@@ -377,28 +374,29 @@ class ImageView(QAbstractItemView):
                 self.scrollbar.setVisible(False)
                 self.scrollbar.blockSignals(False)
 
-        else:
-            if not self.viewbox.isVisible():
-                self.viewbox.setVisible(True)
+            return
 
-            self.image_item.setImage(self.model().image_view)
+        self.image_item.setImage(self.model().image_view)
 
-            try:
-                if not self.scrollbar.isVisible():
-                    self.scrollbar.setVisible(True)
+        if not self.viewbox.isVisible():
+            self.viewbox.setVisible(True)
 
-                self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
+        try:
+            if not self.scrollbar.isVisible():
+                self.scrollbar.setVisible(True)
 
-                if self.scrollbar.sliderPosition() != self.model().dims[0]:
-                    self.scrollbar.blockSignals(True)
-                    self.scrollbar.setSliderPosition(self.model().dims[0])
-                    self.scrollbar.blockSignals(False)
+            self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
 
-            except TypeError:
-                if self.scrollbar.isVisible():
-                    self.scrollbar.blockSignals(True)
-                    self.scrollbar.setVisible(False)
-                    self.scrollbar.blockSignals(False)
+            if self.scrollbar.sliderPosition() != self.model().dims[0]:
+                self.scrollbar.blockSignals(True)
+                self.scrollbar.setSliderPosition(self.model().dims[0])
+                self.scrollbar.blockSignals(False)
+
+        except TypeError:
+            if self.scrollbar.isVisible():
+                self.scrollbar.blockSignals(True)
+                self.scrollbar.setVisible(False)
+                self.scrollbar.blockSignals(False)
 
 
 
@@ -417,11 +415,10 @@ class ImageView(QAbstractItemView):
         Update the cursor position when the mouse moves
         in the image scene.
         """
-        if self.image_item.image is not None and len(self.model().dims) >= 2:
+        if self.viewbox.isVisible():
             try:
                 max_y, max_x = self.image_item.image.shape
             except ValueError:
-                # max_y, max_x, max_z = self.image_item.image.shape
                 max_y, max_x = self.image_item.image.shape[:2]
 
             scene_pos = self.viewbox.mapSceneToView(pos)
@@ -460,9 +457,12 @@ class PlotView(QAbstractItemView):
     """
     Shows a plot view of the associated PlotModel.
 
+    Currently a y(x) plot can be shown where x is either
+    an index or a second column of data in the same
+    dataset.
 
+    TODO: Multiplots
     """
-
     def __init__(self, model, dims_model):
         super().__init__()
 
@@ -501,29 +501,7 @@ class PlotView(QAbstractItemView):
 
 
     def update_plot(self):
-        right_type = isinstance(self.model().node, h5py.Dataset)
-        if not right_type:
-            object_dtype = True
-            right_ndim = False
-            right_shape = False
-        else:
-            object_dtype = self.model().node.dtype == 'object'
-            try:
-                right_ndim = self.model().plot_view.ndim in [1, 2]
-            except AttributeError:
-                if isinstance(self.model().plot_view, list):
-                    right_ndim = True
-            try:
-                if self.model().plot_view.ndim == 1:
-                    right_shape = True
-                else:
-                    # ndim = 2, we are plotting two columns of data against each other
-                    right_shape = self.model().plot_view.shape[-1] == 2
-            except AttributeError:
-                if isinstance(self.model().plot_view, list):
-                    right_shape = True
-
-        if not right_type or object_dtype or not right_ndim or not right_shape:
+        if isinstance(self.model().plot_view, type(None)):
             if self.plot_item.isVisible():
                 self.plot_item.setVisible(False)
 
@@ -534,8 +512,6 @@ class PlotView(QAbstractItemView):
 
             return
 
-        if not self.plot_item.isVisible():
-            self.plot_item.setVisible(True)
 
         self.plot_item.clearPlots()
         self.plot_item.enableAutoRange()
@@ -588,6 +564,9 @@ class PlotView(QAbstractItemView):
             self.plot_item.getAxis(i).setStyle(**{'showValues':False})
 
 
+        if not self.plot_item.isVisible():
+            self.plot_item.setVisible(True)
+
         try:
             if not self.scrollbar.isVisible():
                 self.scrollbar.setVisible(True)
@@ -622,7 +601,7 @@ class PlotView(QAbstractItemView):
         Update the cursor position when the mouse moves
         in the image scene.
         """
-        if self.plot_item is not None:
+        if self.plot_item.isVisible():
             vb = self.plot_item.getViewBox()
             x_lim, y_lim = vb.viewRange()
             x_min, x_max = x_lim
