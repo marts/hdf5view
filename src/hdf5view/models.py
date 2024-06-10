@@ -18,6 +18,7 @@ from qtpy.QtCore import (
 from qtpy.QtGui import (
     QBrush,
     QIcon,
+    QColor,
 
     QStandardItem,
     QStandardItemModel,
@@ -199,6 +200,18 @@ class DatasetTableModel(QAbstractTableModel):
                 'fletcher32', 'scaleoffset',
             )
 
+        compound_names = self.node.dtype.names
+        if compound_names:
+            self.values = (
+                str(self.node.name), str(self.node.dtype), str(self.node.ndim),
+                f"{self.node.shape}  (ncols={len(compound_names)})",
+                str(self.node.maxshape),
+                str(self.node.chunks), str(self.node.compression),
+                str(self.node.shuffle), str(self.node.fletcher32),
+                str(self.node.scaleoffset),
+            )
+
+        else:
             self.values = (
                 str(self.node.name), str(self.node.dtype), str(self.node.ndim),
                 str(self.node.shape), str(self.node.maxshape),
@@ -206,6 +219,7 @@ class DatasetTableModel(QAbstractTableModel):
                 str(self.node.shuffle), str(self.node.fletcher32),
                 str(self.node.scaleoffset),
             )
+
 
         self.row_count = len(self.keys)
         self.endResetModel()
@@ -234,6 +248,10 @@ class DatasetTableModel(QAbstractTableModel):
                     return self.keys[row]
                 elif column == 1:
                     return self.values[row]
+
+            if role == Qt.ForegroundRole:
+                if row == 3 and column == 1 and self.node.dtype.names:
+                    return QColor('red')
 
 
 class DataTableModel(QAbstractTableModel):
@@ -284,13 +302,10 @@ class DataTableModel(QAbstractTableModel):
 
         elif self.ndim == 1:
             self.row_count = shape[0]
-
             if self.compound_names:
                 self.column_count = len(self.compound_names)
             else:
                 self.column_count = 1
-
-            self.dims = tuple([slice(None)])
 
         elif self.ndim == 2:
             self.row_count = shape[-2]
@@ -386,6 +401,19 @@ class DataTableModel(QAbstractTableModel):
         self.shape = self.node.shape
 
         self.dims = get_dims_from_str(dims)
+
+        if self.compound_names:
+            if isinstance(self.dims[1], int):
+                self.compound_names = tuple([self.node.dtype.names[self.dims[1]]])
+            else:
+                self.compound_names = self.node.dtype.names[self.dims[1]]
+            self.column_count = len(self.compound_names)
+            self.data_view = self.node[self.dims[0]][list(self.compound_names)]
+            self.row_count = self.data_view.shape[0]
+
+            self.endResetModel()
+            return
+
         self.data_view = self.node[self.dims]
 
         try:
@@ -393,13 +421,10 @@ class DataTableModel(QAbstractTableModel):
         except IndexError:
             self.row_count = 1
 
-        if self.compound_names:
-            self.column_count = len(self.compound_names)
-        else:
-            try:
-                self.column_count = self.data_view.shape[1]
-            except IndexError:
-                self.column_count = 1
+        try:
+            self.column_count = self.data_view.shape[1]
+        except IndexError:
+            self.column_count = 1
 
         self.endResetModel()
 
@@ -729,24 +754,32 @@ class DimsTableModel(QAbstractTableModel):
         self.column_count = 0
         self.row_count = 1
         self.shape = ()
+        self.compound_names = None
 
     def update_node(self, path, now_on_PlotView=False):
         """
         Update the current node path
         """
+        self.compound_names = None
         self.column_count = 0
         self.shape = []
 
         self.beginResetModel()
         self.node = self.hdf[path]
+        self.compound_names = self.node.dtype.names
 
         if not isinstance(self.node, h5py.Dataset) or self.node.dtype == 'object':
             self.endResetModel()
             return
 
         if self.node.ndim == 1:
-            self.shape = [':']
-            self.column_count = 1
+            if self.compound_names:
+                self.shape = [':', ':']
+                self.column_count = 2
+
+            else:
+                self.shape = [':']
+                self.column_count = 1
 
         elif self.node.ndim == 2:
             self.shape = [':', ':']
@@ -792,6 +825,7 @@ class DimsTableModel(QAbstractTableModel):
                 else:
                     return Qt.AlignmentFlag.AlignVCenter + Qt.AlignmentFlag.AlignHCenter
 
+
     def flags(self, index):
         flags = super().flags(index)
         flags |= Qt.ItemIsEditable
@@ -806,8 +840,12 @@ class DimsTableModel(QAbstractTableModel):
             if ':' not in value:
                 try:
                     num = int(value)
-                    if num < 0 or num >= self.node.shape[column]:
-                        return False
+                    if self.compound_names:
+                        if num < 0 or num >= len(self.node.dtype.names):
+                            return False
+                    else:
+                        if num < 0 or num >= self.node.shape[column]:
+                            return False
 
                 except ValueError:
                     return False
