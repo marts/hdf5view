@@ -327,8 +327,10 @@ class ImageView(QAbstractItemView):
         self.setModel(model)
         self.dims_model = dims_model
 
+        pg.setConfigOptions(antialias=True)
         pg.setConfigOption('background', 'w')
-        pg.setConfigOption('foreground', 'w')
+        pg.setConfigOption('foreground', 'k')
+        pg.setConfigOption('leftButtonPan', False)
 
         # Main graphics layout widget
         graphics_layout_widget = pg.GraphicsLayoutWidget()
