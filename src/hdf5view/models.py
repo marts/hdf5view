@@ -193,14 +193,18 @@ class DatasetTableModel(QAbstractTableModel):
         self.beginResetModel()
         self.node = self.hdf[path]
 
-        if isinstance(self.node, h5py.Dataset):
-            self.keys = (
-                'name', 'dtype', 'ndim', 'shape',
-                'maxshape', 'chunks', 'compression', 'shuffle',
-                'fletcher32', 'scaleoffset',
-            )
+        if not isinstance(self.node, h5py.Dataset):
+            self.endResetModel()
+            return
+
+        self.keys = (
+            'name', 'dtype', 'ndim', 'shape',
+            'maxshape', 'chunks', 'compression', 'shuffle',
+            'fletcher32', 'scaleoffset',
+        )
 
         compound_names = self.node.dtype.names
+
         if compound_names:
             self.values = (
                 str(self.node.name), str(self.node.dtype), str(self.node.ndim),
@@ -224,6 +228,7 @@ class DatasetTableModel(QAbstractTableModel):
         self.row_count = len(self.keys)
         self.endResetModel()
 
+
     def rowCount(self, parent=QModelIndex()):
         return self.row_count
 
@@ -238,20 +243,20 @@ class DatasetTableModel(QAbstractTableModel):
                 return str(section)
 
     def data(self, index, role=Qt.DisplayRole):
-
         if index.isValid():
             column = index.column()
             row = index.row()
 
-            if role in (Qt.DisplayRole, Qt.ToolTipRole):
-                if column == 0:
-                    return self.keys[row]
-                elif column == 1:
-                    return self.values[row]
+            if isinstance(self.node, h5py.Dataset):
+                if role in (Qt.DisplayRole, Qt.ToolTipRole):
+                    if column == 0:
+                        return self.keys[row]
+                    elif column == 1:
+                        return self.values[row]
 
-            if role == Qt.ForegroundRole:
-                if row == 3 and column == 1 and self.node.dtype.names:
-                    return QColor('red')
+                if role == Qt.ForegroundRole:
+                    if row == 3 and column == 1 and self.node.dtype.names:
+                        return QColor('red')
 
 
 class DataTableModel(QAbstractTableModel):
@@ -306,6 +311,7 @@ class DataTableModel(QAbstractTableModel):
                 self.column_count = len(self.compound_names)
             else:
                 self.column_count = 1
+            self.dims = tuple([slice(None)])
 
         elif self.ndim == 2:
             self.row_count = shape[-2]
@@ -335,10 +341,53 @@ class DataTableModel(QAbstractTableModel):
 
     def headerData(self, section, orientation, role):
         if role == Qt.DisplayRole:
-            if self.compound_names and orientation == Qt.Horizontal:
-                return self.compound_names[section]
-            else:
-                return str(section)
+            if orientation == Qt.Horizontal:
+                if self.compound_names:
+                    return self.compound_names[section]
+                else:
+                    if self.ndim in [0, 1]:
+                        return None
+
+                    if self.ndim == 2:
+                        w = list(range(self.node.shape[1]))
+                        w_e = w[self.dims[1]]
+                        if isinstance(w_e, int):
+                            w_e = [w_e]
+                        return str(w_e[section])
+
+                    s_loc = [i for i,j in enumerate(self.dims) if isinstance(j, slice)]
+                    if self.ndim > 2:
+                        if len(s_loc) >= 2:
+                            idx = 1
+                            w = list(range(self.node.shape[s_loc[idx]]))
+                            w_e = w[self.dims[s_loc[idx]]]
+                            if isinstance(w_e, int):
+                                w_e = [w_e]
+                            return str(w_e[section])
+                        return None
+
+            elif orientation == Qt.Vertical:
+                if self.ndim == 0:
+                    return None
+
+                if self.ndim in [1, 2]:
+                    w = list(range(self.node.shape[0]))
+                    w_e = w[self.dims[0]]
+                    if isinstance(w_e, int):
+                        w_e = [w_e]
+
+                    return str(w_e[section])
+
+                s_loc = [i for i,j in enumerate(self.dims) if isinstance(j, slice)]
+                if self.ndim > 2:
+                    if len(s_loc) >= 1:
+                        idx = 0
+                        w = list(range(self.node.shape[s_loc[idx]]))
+                        w_e = w[self.dims[s_loc[idx]]]
+                        if isinstance(w_e, int):
+                            w_e = [w_e]
+                        return str(w_e[section])
+                    return None
 
         super().headerData(section, orientation, role)
 
@@ -408,11 +457,23 @@ class DataTableModel(QAbstractTableModel):
             else:
                 self.compound_names = self.node.dtype.names[self.dims[1]]
             self.column_count = len(self.compound_names)
+            if isinstance(self.dims[0], int):
+                dims = list(self.dims)
+                dims[0] = slice(dims[0], dims[0] + 1, None)
+                self.dims = tuple(dims)
             self.data_view = self.node[self.dims[0]][list(self.compound_names)]
-            self.row_count = self.data_view.shape[0]
+            if self.data_view.ndim == 0:
+                self.row_count = 1
+            else:
+                self.row_count = self.data_view.shape[0]
 
             self.endResetModel()
             return
+
+        if self.ndim == 2 and isinstance(self.dims[0], int):
+            dims = list(self.dims)
+            dims[0] = slice(dims[0], dims[0] + 1, None)
+            self.dims = tuple(dims)
 
         self.data_view = self.node[self.dims]
 
@@ -603,18 +664,15 @@ class PlotModel(QAbstractItemModel):
         """
         Update the current node path
         """
-        self.compound_names = None
-
         self.beginResetModel()
 
+        self.node = self.hdf[path]
         self.row_count = 0
         self.column_count = 0
-
+        self.ndim = 0
         self.dims = ()
-
-        self.node = self.hdf[path]
-
         self.plot_view = None
+        self.compound_names = None
 
         if not isinstance(self.node, h5py.Dataset) or self.node.dtype == 'object':
             self.endResetModel()
@@ -629,41 +687,37 @@ class PlotModel(QAbstractItemModel):
         if self.ndim == 0:
             self.row_count = 1
             self.column_count = 1
+            self.endResetModel()
+            return
 
-        elif self.ndim == 1:
+        if self.ndim == 1:
             self.row_count = shape[0]
+            self.dims = tuple([slice(None)])
 
             if self.compound_names:
-                self.column_count = len(self.compound_names)
+                self.column_count = 1
+                self.dims = tuple([slice(None), 0])
+                self.compound_names = tuple([self.node.dtype.names[0]])
+                self.plot_view = self.node[self.dims[0]][list(self.compound_names)]
                 self.endResetModel()
                 return
 
-            self.column_count = 1
-            self.dims = tuple([slice(None)])
-            self.plot_view = self.node[self.dims]
-
         elif self.ndim == 2:
             self.row_count = shape[-2]
-            self.column_count = 1
             self.dims = tuple([slice(None), 0])
-            self.plot_view = self.node[self.dims]
 
         elif self.ndim > 2 and shape[-1] in [3, 4]:
             self.row_count = shape[-3]
-            self.column_count = 1 # shape[-2]
-            self.dims = tuple(([0] * (self.ndim - 3)) + [slice(None),
-                                                         0,
-                                                         0])
-            self.plot_view = self.node[self.dims]
+            self.dims = tuple(([0] * (self.ndim - 3)) + [slice(None), 0, 0])
 
         else:
             self.row_count = shape[-2]
-            self.column_count = 1 # shape[-1]
-            self.dims = tuple(([0] * (self.ndim - 2)) + [slice(None),
-                                                         0])
-            self.plot_view = self.node[self.dims]
+            self.dims = tuple(([0] * (self.ndim - 2)) + [slice(None), 0])
 
+        self.column_count = 1
+        self.plot_view = self.node[self.dims]
         self.endResetModel()
+
 
     def parent(self, childIndex=QModelIndex()):
         return self.createIndex()
@@ -708,16 +762,19 @@ class PlotModel(QAbstractItemModel):
 
         self.row_count = None
         self.column_count = None
-        self.dims = []
+        self.dims = ()
         self.plot_view = None
 
         self.dims = get_dims_from_str(dims)
 
-        if len(self.dims) >= 1 and not self.node.dtype == 'object' and not self.compound_names:
+        if len(self.dims) >= 1 and not self.node.dtype == 'object':
             if not any(isinstance(i, slice) for i in self.dims):
                 self.row_count = 1
                 self.column_count = 1
-            else:
+                self.endResetModel()
+                return
+
+            if not self.compound_names:
                 self.plot_view = self.node[self.dims]
                 shape = self.plot_view.shape
                 self.row_count = shape[0]
@@ -730,6 +787,19 @@ class PlotModel(QAbstractItemModel):
 
                 else:
                     self.plot_view = None
+                    self.column_count = 1
+
+            else:
+                if isinstance(self.dims[1], int):
+                    self.compound_names = tuple([self.node.dtype.names[self.dims[1]]])
+                else:
+                    self.compound_names = self.node.dtype.names[self.dims[1]]
+                self.column_count = len(self.compound_names)
+                if self.column_count in [1, 2]:
+                    self.plot_view = self.node[self.dims[0]][list(self.compound_names)]
+                    self.row_count = self.plot_view.shape[0]
+                else:
+                    self.row_count = 1
                     self.column_count = 1
 
         else:
@@ -766,16 +836,19 @@ class DimsTableModel(QAbstractTableModel):
 
         self.beginResetModel()
         self.node = self.hdf[path]
-        self.compound_names = self.node.dtype.names
 
         if not isinstance(self.node, h5py.Dataset) or self.node.dtype == 'object':
             self.endResetModel()
             return
 
+        self.compound_names = self.node.dtype.names
+
         if self.node.ndim == 1:
             if self.compound_names:
                 self.shape = [':', ':']
                 self.column_count = 2
+                if now_on_PlotView:
+                    self.shape[-1] = '0'
 
             else:
                 self.shape = [':']
@@ -840,7 +913,7 @@ class DimsTableModel(QAbstractTableModel):
             if ':' not in value:
                 try:
                     num = int(value)
-                    if self.compound_names:
+                    if self.compound_names and column == 1:
                         if num < 0 or num >= len(self.node.dtype.names):
                             return False
                     else:

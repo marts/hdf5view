@@ -381,23 +381,30 @@ class ImageView(QAbstractItemView):
         if not self.viewbox.isVisible():
             self.viewbox.setVisible(True)
 
-        try:
-            if not self.scrollbar.isVisible():
-                self.scrollbar.setVisible(True)
+        if not self.scrollbar.isVisible():
+            self.scrollbar.setVisible(True)
 
-            self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
+        if self.model().ndim > 2:
+            try:
+                if not self.scrollbar.isVisible():
+                    self.scrollbar.setVisible(True)
 
-            if self.scrollbar.sliderPosition() != self.model().dims[0]:
-                self.scrollbar.blockSignals(True)
-                self.scrollbar.setSliderPosition(self.model().dims[0])
-                self.scrollbar.blockSignals(False)
+                self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
 
-        except TypeError:
-            if self.scrollbar.isVisible():
-                self.scrollbar.blockSignals(True)
-                self.scrollbar.setVisible(False)
-                self.scrollbar.blockSignals(False)
+                if self.scrollbar.sliderPosition() != self.model().dims[0]:
+                    self.scrollbar.blockSignals(True)
+                    self.scrollbar.setSliderPosition(self.model().dims[0])
+                    self.scrollbar.blockSignals(False)
 
+            except TypeError:
+                if self.scrollbar.isVisible():
+                    self.scrollbar.blockSignals(True)
+                    self.scrollbar.setVisible(False)
+                    self.scrollbar.blockSignals(False)
+        else:
+            self.scrollbar.blockSignals(True)
+            self.scrollbar.setVisible(False)
+            self.scrollbar.blockSignals(False)
 
 
     def handle_scroll(self, value):
@@ -471,7 +478,7 @@ class PlotView(QAbstractItemView):
 
         pg.setConfigOptions(antialias=True)
         pg.setConfigOption('background', 'w')
-        pg.setConfigOption('foreground', 'w')
+        pg.setConfigOption('foreground', 'k')
         pg.setConfigOption('leftButtonPan', False)
 
         # Main graphics layout widget
@@ -494,6 +501,11 @@ class PlotView(QAbstractItemView):
 
         self.init_signals()
 
+        # self.pen = (0,0,200)
+        self.pen = None
+        self.symbolBrush = (0,0,255)
+        self.symbolPen = 'k'
+
 
     def init_signals(self):
         self.plot_item.scene().sigMouseMoved.connect(self.handle_mouse_moved)
@@ -502,52 +514,20 @@ class PlotView(QAbstractItemView):
 
     def update_plot(self):
         if isinstance(self.model().plot_view, type(None)):
-            if self.plot_item.isVisible():
-                self.plot_item.setVisible(False)
-
-            if self.scrollbar.isVisible():
-                self.scrollbar.blockSignals(True)
-                self.scrollbar.setVisible(False)
-                self.scrollbar.blockSignals(False)
+            self.plot_item.setVisible(False)
+            self.scrollbar.blockSignals(True)
+            self.scrollbar.setVisible(False)
+            self.scrollbar.blockSignals(False)
 
             return
 
 
-        self.plot_item.clearPlots()
+        self.plot_item.setTitle(None)
         self.plot_item.enableAutoRange()
-        self.plot_item.plot(self.model().plot_view,
-                            pen=(0,0,200),
-                            symbolBrush=(0,0,255),
-                            symbolPen='k'
-                            )
 
-        c_1 = self.model().plot_view.ndim == 2
-        s_loc = [i if isinstance(j, slice) else -1 for i, j in enumerate(self.model().dims)]
-        s_idx = [i for i in s_loc if i != -1]
-        if c_1 and len(s_idx) == 2:
-            # here we are plotting two columns of data against each other
-            q = list(range(self.model().node.shape[s_idx[1]]))[self.model().dims[s_idx[1]]]
-            w_x = list(self.dims_model.shape)
-            w_x[s_idx[1]] = str(q[0])
-            w_y = list(self.dims_model.shape)
-            w_y[s_idx[1]] = str(q[1])
+        self.set_up_plot()
 
-            x_slice = f" [{', '.join(w_x)}]"
-            x_label = f"{self.model().node.name.split('/')[-1]}{x_slice}"
-            y_slice = f" [{', '.join(w_y)}]"
-            y_label = f"{self.model().node.name.split('/')[-1]}{y_slice}"
-        else:
-            # here only one column of data is plotted (it may be sliced)
-            x_label = 'Index'
-            y_slice = f" [{', '.join(self.dims_model.shape)}]" if not self.dims_model.shape == [":"] else ""
-            y_label = f"{self.model().node.name.split('/')[-1]}{y_slice}"
-
-        self.plot_item.setLabel('bottom', x_label, **{'font-size':'14pt', 'font':'Arial'})
         self.plot_item.showAxis("top")
-        self.plot_item.setLabel('left',
-                                y_label,
-                                **{'font-size':'14pt', 'font':'Arial'})
-
         self.plot_item.showAxis('right')
         for i in ["bottom", "top", "left", "right"]:
             ax = self.plot_item.getAxis(i)
@@ -567,23 +547,106 @@ class PlotView(QAbstractItemView):
         if not self.plot_item.isVisible():
             self.plot_item.setVisible(True)
 
-        try:
-            if not self.scrollbar.isVisible():
-                self.scrollbar.setVisible(True)
+        if not self.scrollbar.isVisible():
+            self.scrollbar.setVisible(True)
 
-            self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
+        if not isinstance(self.model().dims[0], slice):
+            try:
+                if not self.scrollbar.isVisible():
+                    self.scrollbar.setVisible(True)
 
-            if self.scrollbar.sliderPosition() != self.model().dims[0]:
-                self.scrollbar.blockSignals(True)
-                self.scrollbar.setSliderPosition(self.model().dims[0])
-                self.scrollbar.blockSignals(False)
+                self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
 
-        except TypeError:
-            if self.scrollbar.isVisible():
-                self.scrollbar.blockSignals(True)
-                self.scrollbar.setVisible(False)
-                self.scrollbar.blockSignals(False)
+                if self.scrollbar.sliderPosition() != self.model().dims[0]:
+                    self.scrollbar.blockSignals(True)
+                    self.scrollbar.setSliderPosition(self.model().dims[0])
+                    self.scrollbar.blockSignals(False)
 
+            except TypeError:
+                if self.scrollbar.isVisible():
+                    self.scrollbar.blockSignals(True)
+                    self.scrollbar.setVisible(False)
+                    self.scrollbar.blockSignals(False)
+
+        else:
+            self.scrollbar.blockSignals(True)
+            self.scrollbar.setVisible(False)
+            self.scrollbar.blockSignals(False)
+
+
+    def set_up_plot(self):
+        c_n = self.model().compound_names
+
+        if c_n:
+            if len(c_n) == 1:
+                # plot a single column of data against the index
+                self.plot_item.plot(self.model().plot_view[c_n[0]],
+                                    pen=self.pen,
+                                    symbolBrush=self.symbolBrush,
+                                    symbolPen=self.symbolPen,
+                                    clear=True
+                                    )
+
+            elif len(c_n) == 2:
+                # plot two columns of data against each other
+                self.plot_item.plot(self.model().plot_view[c_n[0]],
+                                    self.model().plot_view[c_n[1]],
+                                    pen=self.pen,
+                                    symbolBrush=self.symbolBrush,
+                                    symbolPen=self.symbolPen,
+                                    clear=True
+                                    )
+
+        else:
+            self.plot_item.plot(self.model().plot_view,
+                                pen=self.pen,
+                                symbolBrush=self.symbolBrush,
+                                symbolPen=self.symbolPen,
+                                clear=True
+                                )
+
+        two_cols = self.model().column_count == 2
+        s_loc = [i if isinstance(j, slice) else -1 for i, j in enumerate(self.model().dims)]
+        s_idx = [i for i in s_loc if i != -1]
+        if two_cols:
+            # here we are plotting two columns of data against each other
+            if c_n:
+                self.plot_item.setTitle(self.model().node.name.split('/')[-1])
+                self.plot_item.titleLabel.item.setFont(QFont("Arial", 14, QFont.Bold))
+                d_slice = f" [{self.dims_model.shape[0]}]" if not self.dims_model.shape[0] == ":" else ""
+                x_label = f"{c_n[0]}{d_slice}"
+                y_label = f"{c_n[1]}{d_slice}"
+            else:
+                q = list(range(self.model().node.shape[s_idx[1]]))[self.model().dims[s_idx[1]]]
+                w_x = list(self.dims_model.shape)
+                w_x[s_idx[1]] = str(q[0])
+                w_y = list(self.dims_model.shape)
+                w_y[s_idx[1]] = str(q[1])
+
+                x_slice = f" [{', '.join(w_x)}]"
+                x_label = f"{self.model().node.name.split('/')[-1]}{x_slice}"
+                y_slice = f" [{', '.join(w_y)}]"
+                y_label = f"{self.model().node.name.split('/')[-1]}{y_slice}"
+        else:
+            # here only one column of data is plotted (it may be sliced)
+            x_label = 'Index'
+            if c_n:
+                self.plot_item.setTitle(self.model().node.name.split('/')[-1])
+                self.plot_item.titleLabel.item.setFont(QFont("Arial", 14, QFont.Bold))
+                y_slice = f" [{self.dims_model.shape[0]}]" if not self.dims_model.shape[0] == ":" else ""
+                y_label = f"{c_n[0]}{y_slice}"
+            else:
+                y_slice = f" [{', '.join(self.dims_model.shape)}]" if not self.dims_model.shape == [":"] else ""
+                y_label = f"{self.model().node.name.split('/')[-1]}{y_slice}"
+
+        self.plot_item.setLabel('bottom',
+                                x_label,
+                                **{'font-size':'14pt', 'font':'Arial'}
+                                )
+        self.plot_item.setLabel('left',
+                                y_label,
+                                **{'font-size':'14pt', 'font':'Arial'}
+                                )
 
 
     def handle_scroll(self, value):
