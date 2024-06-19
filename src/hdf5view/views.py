@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
-
+"""
+This module contains the main HDF5 container widget and implementations
+of QAbstractItemView (ImageView and PlotView), which allow images
+and y(x) plots to be shown.
+"""
 from qtpy.QtCore import (
     Qt,
     QModelIndex,
 )
 
-# from qtpy.QtGui import (
-#     QKeySequence,
-# )
+from qtpy.QtGui import (
+    QFont,
+    # QKeySequence,
+)
 
 from qtpy.QtWidgets import (
     QAbstractItemView,
@@ -15,6 +20,7 @@ from qtpy.QtWidgets import (
     QHeaderView,
     # QLabel,
     # QMainWindow,
+    QMessageBox,
     QScrollBar,
     QTableView,
     QTabBar,
@@ -25,6 +31,8 @@ from qtpy.QtWidgets import (
 )
 
 import pyqtgraph as pg
+import psutil
+import h5py
 
 from .models import (
     AttributesTableModel,
@@ -33,6 +41,7 @@ from .models import (
     DimsTableModel,
     TreeModel,
     ImageModel,
+    PlotModel,
 )
 
 
@@ -42,13 +51,13 @@ class HDF5Widget(QWidget):
     """
     Main HDF5 view container widget
     """
-
     def __init__(self, hdf):
         super().__init__()
 
         self.hdf = hdf
 
         self.image_views = {}
+        self.plot_views = {}
 
         # Initialise the models
         self.tree_model = TreeModel(self.hdf)
@@ -57,6 +66,7 @@ class HDF5Widget(QWidget):
         self.dims_model = DimsTableModel(self.hdf)
         self.data_model = DataTableModel(self.hdf)
         self.image_model = ImageModel(self.hdf)
+        self.plot_model = PlotModel(self.hdf)
 
         # Set up the main file tree view
         self.tree_view = QTreeView(headerHidden=False)
@@ -120,6 +130,12 @@ class HDF5Widget(QWidget):
         # for each tab so that it can be restored when the tab is changed.
         self.tab_node = {}
 
+        # if loading a node would consume a larger fraction of the
+        # available memory than self.memory_ratio_limit, a warning
+        # dialog will appear so that the user can either opt to load
+        # the node or cancel loading.
+        self.memory_ratio_limit = 0.3
+
         # Finally, initialise the signals for the view
         self.init_signals()
 
@@ -165,6 +181,10 @@ class HDF5Widget(QWidget):
             self.image_model.set_dims(self.dims_model.shape)
             self.image_views[id_cw].update_image()
 
+        elif isinstance(self.tabs.currentWidget(), PlotView):
+            self.plot_model.set_dims(self.dims_model.shape)
+            self.plot_views[id_cw].update_plot()
+
         self.tab_dims[id_cw] = list(self.dims_model.shape)
 
 
@@ -181,13 +201,30 @@ class HDF5Widget(QWidget):
 
         path = self.tree_model.itemFromIndex(index).data(Qt.UserRole)
 
+        if isinstance(self.hdf[path], h5py.Dataset):
+            memory_ratio = self.calculate_memory_ratio(path)
+            continue_loading = self.check_node_size(memory_ratio, path)
+            if not continue_loading:
+                # user opts not to load node
+                if not deselected.isEmpty():
+                    index = deselected.indexes()[0]
+                else:
+                    index = QModelIndex()
+                self.tree_view.selectionModel().blockSignals(True)
+                self.tree_view.setCurrentIndex(index)
+                self.tree_view.selectionModel().blockSignals(False)
+                return
+
         self.attrs_model.update_node(path)
         self.attrs_view.scrollToTop()
 
         self.dataset_model.update_node(path)
         self.dataset_view.scrollToTop()
 
-        self.dims_model.update_node(path)
+        self.dims_model.update_node(path,
+                                    now_on_PlotView=isinstance(self.tabs.currentWidget(),
+                                                               PlotView)
+                                    )
         self.dims_view.scrollToTop()
 
         self.data_model.update_node(path)
@@ -195,12 +232,17 @@ class HDF5Widget(QWidget):
 
         self.image_model.update_node(path)
 
+        self.plot_model.update_node(path)
+
         id_cw = id(self.tabs.currentWidget())
         self.tab_dims[id_cw] = list(self.dims_model.shape)
         self.tab_node[id_cw] = index
 
         if isinstance(self.tabs.currentWidget(), ImageView):
             self.image_views[id_cw].update_image()
+
+        if isinstance(self.tabs.currentWidget(), PlotView):
+            self.plot_views[id_cw].update_plot()
 
 
 
@@ -216,22 +258,25 @@ class HDF5Widget(QWidget):
         if c_index != o_index:
             self.tree_view.setCurrentIndex(o_index)
 
-        self.tab_dims[id(self.tabs.currentWidget())] = o_slice
-
         self.dims_model.beginResetModel()
-        self.dims_model.shape = list(self.tab_dims[id(self.tabs.currentWidget())])
+        self.dims_model.shape = o_slice
         self.dims_model.endResetModel()
         self.dims_model.dataChanged.emit(QModelIndex(), QModelIndex(), [])
 
 
     def add_image(self):
         """
-        Add an image from the hdf5 file.
+        Add a tab to view an image of a dataset in the hdf5 file.
         """
+        c_index = self.tab_node[id(self.tabs.currentWidget())]
+        path = self.tree_model.itemFromIndex(c_index).data(Qt.UserRole)
+        self.dims_model.update_node(path)
+        self.image_model.update_node(path)
+
         iv = ImageView(self.image_model, self.dims_model)
+        iv.update_image()
 
         id_iv = id(iv)
-
         self.image_views[id_iv] = iv
 
         self.tab_dims[id_iv] = list(self.dims_model.shape)
@@ -239,7 +284,36 @@ class HDF5Widget(QWidget):
         self.tab_node[id_iv] = tree_index
 
         index = self.tabs.addTab(self.image_views[id_iv], 'Image')
+        self.tabs.blockSignals(True)
         self.tabs.setCurrentIndex(index)
+        self.tabs.blockSignals(False)
+
+
+
+    def add_plot(self):
+        """
+        Add a tab to view an plot of a dataset in the hdf5 file.
+        """
+        c_index = self.tab_node[id(self.tabs.currentWidget())]
+        path = self.tree_model.itemFromIndex(c_index).data(Qt.UserRole)
+        self.dims_model.update_node(path, now_on_PlotView=True)
+        self.plot_model.update_node(path)
+
+        pv = PlotView(self.plot_model, self.dims_model)
+        pv.update_plot()
+
+        id_pv = id(pv)
+
+        self.plot_views[id_pv] = pv
+
+        self.tab_dims[id_pv] = list(self.dims_model.shape)
+        tree_index = self.tree_view.currentIndex()
+        self.tab_node[id_pv] = tree_index
+
+        index = self.tabs.addTab(self.plot_views[id_pv], 'Plot')
+        self.tabs.blockSignals(True)
+        self.tabs.setCurrentIndex(index)
+        self.tabs.blockSignals(False)
 
 
     def handle_close_tab(self, index):
@@ -255,70 +329,102 @@ class HDF5Widget(QWidget):
         widget.deleteLater()
 
 
-# class ImageWindow(QMainWindow):
+    def calculate_memory_ratio(self, path):
+        """
+        Finds a critical dimension, dim_crit, in bytes
+        for the dataset selected and then calculates
+        and returns memory_ratio: the ratio of dim_crit
+        to the available memory on the sytem.
 
-#     def __init__(self, title, data):
-#         super().__init__()
+        Parameters
+        ----------
+        path : STR
+            Path to a dataset within self.hdf.
 
-#         self.data = data
+        Returns
+        -------
+        memory_ratio : FLOAT
+            The ratio of the critical dimension of the
+            dataset selected, in bytes, to the available
+            memory on the sytem.
 
-#         self.setWindowTitle(title)
 
-#         self.init_actions()
-#         self.init_menus()
-#         self.init_toolbars()
-#         self.init_central_widget()
-#         self.init_statusbar()
+        """
+        node = self.hdf[path]
 
-#     def init_actions(self):
-#         """
-#         Initialise actions
-#         """
-#         self.close_action = QAction(
-#             '&Close',
-#             self,
-#             shortcut=QKeySequence.Close,
-#             statusTip='Close image',
-#             triggered=self.close,
-#         )
+        if node.ndim in [0, 1, 2]:
+            dim_crit = node.nbytes
+        elif node.ndim > 2 and node.shape[-1] in [3, 4]:
+            size = node.shape[-3] * node.shape[-2] * node.shape[-1]
+            dim_crit = node[tuple([0] * node.ndim)].nbytes * size
+        else:
+            size = node.shape[-2] * node.shape[-1]
+            dim_crit = node[tuple([0] * node.ndim)].nbytes * size
 
-#     def init_menus(self):
-#         """
-#         Initialise menus
-#         """
-#         menu = self.menuBar()
+        memory_ratio = dim_crit / psutil.virtual_memory().free
 
-#         # Image menu
-#         self.file_menu = menu.addMenu('&Image')
-#         self.file_menu.addAction(self.close_action)
+        return memory_ratio
 
-#     def init_toolbars(self):
-#         """
-#         Initialise the toobars
-#         """
-#         self.file_toolbar = self.addToolBar('Image')
-#         self.file_toolbar.setObjectName('image_toolbar')
-#         self.file_toolbar.addAction(self.close_action)
 
-#     def init_central_widget(self):
-#         """
-#         Initialise the central widget
-#         """
-#         self.image_view = ImageView(self.data)
-#         self.setCentralWidget(self.image_view)
+    def check_node_size(self, memory_ratio, path):
+        """
+        If memory_ratio > self.memory_ratio_limit, a
+        QMessageBox.warning will appear notifying the
+        user what percentage of available memory will
+        be consumed by loading the node. The user can
+        opt to continue loading the node, or cancel
+        and return to the previous selection in the
+        tree.
 
-#     def init_statusbar(self):
-#         """
-#         Initialise statusbar        """
+        Parameters
+        ----------
+        memory_ratio : FLOAT
+            The ratio of the critical dimension of the
+            dataset selected, in bytes, to the available
+            memory on the sytem.
+        path : STR
+            Path to a dataset within self.hdf.
 
-#         self.status = self.statusBar()
-#         self.status.addPermanentWidget(self.image_view.position_label)
-#         self.status.addPermanentWidget(self.image_view.frame_label)
+        Returns
+        -------
+        bool
+            returns True if memory_ratio <= self.memory_ratio_limit
+            if memory_ratio > self.memory_ratio_limit:
+                returns True if the user presses "Yes"
+                on the dialog, opting to continue
+                loading the node.
+                returns False if the user presses "No"
+                on the dialog, opting to cancel loading
+                the node and return to the previous
+                selection in the tree.
+
+        """
+        if memory_ratio > self.memory_ratio_limit:
+            msg = f"Loading {path} would consume {int(100*memory_ratio):d}%"
+            msg1 = " of the available memory."
+            msg2 = "\nContinue to load?"
+
+            button = QMessageBox.warning(
+                self,
+                "Memory Warning",
+                "".join([msg, msg1, msg2]),
+                buttons=QMessageBox.Yes | QMessageBox.No,
+                defaultButton=QMessageBox.No,
+            )
+
+            if button == QMessageBox.Yes:
+                return True
+
+            return False
+
+        return True
+
+
 
 
 class ImageView(QAbstractItemView):
     """
-    Shows a greyscale image view of the associated ImageModel.
+    Shows a greyscale or rgb(a) image view of the associated ImageModel.
 
     If the node of the hdf5 file has ndim > 2, the image shown can be
     changed by changing the slice (DimsTableModel). A scrollbar is
@@ -336,6 +442,11 @@ class ImageView(QAbstractItemView):
 
         self.setModel(model)
         self.dims_model = dims_model
+
+        pg.setConfigOptions(antialias=True)
+        pg.setConfigOption('background', 'w')
+        pg.setConfigOption('foreground', 'k')
+        pg.setConfigOption('leftButtonPan', False)
 
         # Main graphics layout widget
         graphics_layout_widget = pg.GraphicsLayoutWidget()
@@ -372,8 +483,7 @@ class ImageView(QAbstractItemView):
 
 
     def update_image(self):
-        small = self.model().ndim == 2 and any([i == 1 for i in self.model().node.shape])
-        if self.model().ndim < 2 or small:
+        if isinstance(self.model().image_view, type(None)):
             if self.viewbox.isVisible():
                 self.viewbox.setVisible(False)
 
@@ -382,12 +492,17 @@ class ImageView(QAbstractItemView):
                 self.scrollbar.setVisible(False)
                 self.scrollbar.blockSignals(False)
 
-        else:
-            if not self.viewbox.isVisible():
-                self.viewbox.setVisible(True)
+            return
 
-            self.image_item.setImage(self.model().image_view)
+        self.image_item.setImage(self.model().image_view)
 
+        if not self.viewbox.isVisible():
+            self.viewbox.setVisible(True)
+
+        if not self.scrollbar.isVisible():
+            self.scrollbar.setVisible(True)
+
+        if self.model().ndim > 2:
             try:
                 if not self.scrollbar.isVisible():
                     self.scrollbar.setVisible(True)
@@ -404,7 +519,10 @@ class ImageView(QAbstractItemView):
                     self.scrollbar.blockSignals(True)
                     self.scrollbar.setVisible(False)
                     self.scrollbar.blockSignals(False)
-
+        else:
+            self.scrollbar.blockSignals(True)
+            self.scrollbar.setVisible(False)
+            self.scrollbar.blockSignals(False)
 
 
     def handle_scroll(self, value):
@@ -422,11 +540,11 @@ class ImageView(QAbstractItemView):
         Update the cursor position when the mouse moves
         in the image scene.
         """
-        if self.image_item.image is not None and len(self.model().dims) >= 2:
+        if self.viewbox.isVisible():
             try:
                 max_y, max_x = self.image_item.image.shape
             except ValueError:
-                max_y, max_x, max_z = self.image_item.image.shape
+                max_y, max_x = self.image_item.image.shape[:2]
 
             scene_pos = self.viewbox.mapSceneToView(pos)
 
@@ -448,6 +566,240 @@ class ImageView(QAbstractItemView):
             else:
                 self.window().status.showMessage('')
                 self.viewbox.setCursor(Qt.ArrowCursor)
+
+
+    def horizontalOffset(self):
+        return 0
+
+    def verticalOffset(self):
+        return 0
+
+    def moveCursor(self, cursorAction, modifiers):
+        return QModelIndex()
+
+
+class PlotView(QAbstractItemView):
+    """
+    Shows a plot view of the associated PlotModel.
+
+    Currently a y(x) plot can be shown where x is either
+    an index or a second column of data in the same
+    dataset.
+
+    TODO: Multiplots
+    """
+    def __init__(self, model, dims_model):
+        super().__init__()
+
+        self.setModel(model)
+        self.dims_model = dims_model
+
+        pg.setConfigOptions(antialias=True)
+        pg.setConfigOption('background', 'w')
+        pg.setConfigOption('foreground', 'k')
+        pg.setConfigOption('leftButtonPan', False)
+
+        # Main graphics layout widget
+        graphics_layout_widget = pg.GraphicsLayoutWidget()
+
+        self.plot_item = graphics_layout_widget.addPlot()
+
+        # Create a scrollbar for moving through image frames
+        self.scrollbar = QScrollBar(Qt.Horizontal)
+
+        layout = QVBoxLayout()
+
+        layout.addWidget(graphics_layout_widget)
+        layout.addWidget(self.scrollbar)
+
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.setLayout(layout)
+
+        self.init_signals()
+
+        # self.pen = (0,0,200)
+        self.pen = None
+        self.symbolBrush = (0,0,255)
+        self.symbolPen = 'k'
+
+
+    def init_signals(self):
+        self.plot_item.scene().sigMouseMoved.connect(self.handle_mouse_moved)
+        self.scrollbar.valueChanged.connect(self.handle_scroll)
+
+
+    def update_plot(self):
+        if isinstance(self.model().plot_view, type(None)):
+            self.plot_item.setVisible(False)
+            self.scrollbar.blockSignals(True)
+            self.scrollbar.setVisible(False)
+            self.scrollbar.blockSignals(False)
+
+            return
+
+
+        self.plot_item.setTitle(None)
+        self.plot_item.enableAutoRange()
+
+        self.set_up_plot()
+
+        self.plot_item.showAxis("top")
+        self.plot_item.showAxis('right')
+        for i in ["bottom", "top", "left", "right"]:
+            ax = self.plot_item.getAxis(i)
+            ax.setPen(pg.mkPen(color='k', width=2))
+            ax.setStyle(**{"tickAlpha" : 255,
+                           "tickLength": -8})
+        for i in ["bottom", "left"]:
+            lab_font = QFont("Arial")
+            lab_font.setPointSize(11)
+            ax = self.plot_item.getAxis(i)
+            ax.setTextPen('k')
+            ax.setStyle(**{'tickFont':lab_font})
+        for i in ["top", "right"]:
+            self.plot_item.getAxis(i).setStyle(**{'showValues':False})
+
+
+        if not self.plot_item.isVisible():
+            self.plot_item.setVisible(True)
+
+        if not self.scrollbar.isVisible():
+            self.scrollbar.setVisible(True)
+
+        if not isinstance(self.model().dims[0], slice):
+            try:
+                if not self.scrollbar.isVisible():
+                    self.scrollbar.setVisible(True)
+
+                self.scrollbar.setRange(0, self.model().node.shape[0] - 1)
+
+                if self.scrollbar.sliderPosition() != self.model().dims[0]:
+                    self.scrollbar.blockSignals(True)
+                    self.scrollbar.setSliderPosition(self.model().dims[0])
+                    self.scrollbar.blockSignals(False)
+
+            except TypeError:
+                if self.scrollbar.isVisible():
+                    self.scrollbar.blockSignals(True)
+                    self.scrollbar.setVisible(False)
+                    self.scrollbar.blockSignals(False)
+
+        else:
+            self.scrollbar.blockSignals(True)
+            self.scrollbar.setVisible(False)
+            self.scrollbar.blockSignals(False)
+
+
+    def set_up_plot(self):
+        c_n = self.model().compound_names
+
+        if c_n:
+            if len(c_n) == 1:
+                # plot a single column of data against the index
+                self.plot_item.plot(self.model().plot_view[c_n[0]],
+                                    pen=self.pen,
+                                    symbolBrush=self.symbolBrush,
+                                    symbolPen=self.symbolPen,
+                                    clear=True
+                                    )
+
+            elif len(c_n) == 2:
+                # plot two columns of data against each other
+                self.plot_item.plot(self.model().plot_view[c_n[0]],
+                                    self.model().plot_view[c_n[1]],
+                                    pen=self.pen,
+                                    symbolBrush=self.symbolBrush,
+                                    symbolPen=self.symbolPen,
+                                    clear=True
+                                    )
+
+        else:
+            self.plot_item.plot(self.model().plot_view,
+                                pen=self.pen,
+                                symbolBrush=self.symbolBrush,
+                                symbolPen=self.symbolPen,
+                                clear=True
+                                )
+
+        two_cols = self.model().column_count == 2
+        s_loc = [i if isinstance(j, slice) else -1 for i, j in enumerate(self.model().dims)]
+        s_idx = [i for i in s_loc if i != -1]
+        if two_cols:
+            # here we are plotting two columns of data against each other
+            if c_n:
+                self.plot_item.setTitle(self.model().node.name.split('/')[-1])
+                self.plot_item.titleLabel.item.setFont(QFont("Arial", 14, QFont.Bold))
+                d_slice = f" [{self.dims_model.shape[0]}]" if not self.dims_model.shape[0] == ":" else ""
+                x_label = f"{c_n[0]}{d_slice}"
+                y_label = f"{c_n[1]}{d_slice}"
+            else:
+                q = list(range(self.model().node.shape[s_idx[1]]))[self.model().dims[s_idx[1]]]
+                w_x = list(self.dims_model.shape)
+                w_x[s_idx[1]] = str(q[0])
+                w_y = list(self.dims_model.shape)
+                w_y[s_idx[1]] = str(q[1])
+
+                x_slice = f" [{', '.join(w_x)}]"
+                x_label = f"{self.model().node.name.split('/')[-1]}{x_slice}"
+                y_slice = f" [{', '.join(w_y)}]"
+                y_label = f"{self.model().node.name.split('/')[-1]}{y_slice}"
+        else:
+            # here only one column of data is plotted (it may be sliced)
+            x_label = 'Index'
+            if c_n:
+                self.plot_item.setTitle(self.model().node.name.split('/')[-1])
+                self.plot_item.titleLabel.item.setFont(QFont("Arial", 14, QFont.Bold))
+                y_slice = f" [{self.dims_model.shape[0]}]" if not self.dims_model.shape[0] == ":" else ""
+                y_label = f"{c_n[0]}{y_slice}"
+            else:
+                y_slice = f" [{', '.join(self.dims_model.shape)}]" if not self.dims_model.shape == [":"] else ""
+                y_label = f"{self.model().node.name.split('/')[-1]}{y_slice}"
+
+        self.plot_item.setLabel('bottom',
+                                x_label,
+                                **{'font-size':'14pt', 'font':'Arial'}
+                                )
+        self.plot_item.setLabel('left',
+                                y_label,
+                                **{'font-size':'14pt', 'font':'Arial'}
+                                )
+
+
+    def handle_scroll(self, value):
+        """
+        Change the image frame on scroll
+        """
+        self.dims_model.beginResetModel()
+        self.dims_model.shape[0] = str(value)
+        self.dims_model.endResetModel()
+        self.dims_model.dataChanged.emit(QModelIndex(), QModelIndex(), [])
+
+
+    def handle_mouse_moved(self, pos):
+        """
+        Update the cursor position when the mouse moves
+        in the image scene.
+        """
+        if self.plot_item.isVisible():
+            vb = self.plot_item.getViewBox()
+            x_lim, y_lim = vb.viewRange()
+            x_min, x_max = x_lim
+            y_min, y_max = y_lim
+
+            scene_pos = vb.mapSceneToView(pos)
+
+            x = scene_pos.x()
+            y = scene_pos.y()
+
+            if x_min <= x < x_max and y_min <= y < y_max:
+                msg1 = f"X={x:.3e} Y={y:.3e}"
+                self.window().status.showMessage(msg1)
+                vb.setCursor(Qt.CrossCursor)
+            else:
+                self.window().status.showMessage('')
+                vb.setCursor(Qt.ArrowCursor)
 
 
     def horizontalOffset(self):

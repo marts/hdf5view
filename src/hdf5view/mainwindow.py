@@ -135,7 +135,7 @@ class MainWindow(QMainWindow):
             statusTip='Add plot',
             triggered=self.handle_add_plot,
         )
-        self.add_plot_action.setEnabled(False)
+
 
     def init_menus(self):
         """
@@ -198,7 +198,7 @@ class MainWindow(QMainWindow):
         """
         MIN_DOCK_WIDTH = 240
 
-        self.tree_dock = QDockWidget('File structure', self)
+        self.tree_dock = QDockWidget('File Structure', self)
         self.tree_dock.setObjectName('tree_dock')
         self.tree_dock.setMinimumWidth(MIN_DOCK_WIDTH)
 
@@ -470,7 +470,8 @@ class MainWindow(QMainWindow):
         """
         Display a plot window
         """
-        pass
+        hdf5widget = self.tabs.currentWidget()
+        hdf5widget.add_plot()
 
     #
     # Events
