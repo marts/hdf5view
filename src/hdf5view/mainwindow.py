@@ -198,7 +198,7 @@ class MainWindow(QMainWindow):
         """
         MIN_DOCK_WIDTH = 240
 
-        self.tree_dock = QDockWidget('File structure', self)
+        self.tree_dock = QDockWidget('File Structure', self)
         self.tree_dock.setObjectName('tree_dock')
         self.tree_dock.setMinimumWidth(MIN_DOCK_WIDTH)
 

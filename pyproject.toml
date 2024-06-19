@@ -30,6 +30,7 @@ requires-python = ">=3.6"
 dependencies = [
     "h5py",
     "qtpy",
+    "psutil",
     "pyqtgraph"
 ]
 dynamic = ["version"]
