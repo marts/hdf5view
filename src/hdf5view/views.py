@@ -20,6 +20,7 @@ from qtpy.QtWidgets import (
     QHeaderView,
     # QLabel,
     # QMainWindow,
+    QMessageBox,
     QScrollBar,
     QTableView,
     QTabBar,
@@ -30,6 +31,8 @@ from qtpy.QtWidgets import (
 )
 
 import pyqtgraph as pg
+import psutil
+import h5py
 
 from .models import (
     AttributesTableModel,
@@ -127,6 +130,12 @@ class HDF5Widget(QWidget):
         # for each tab so that it can be restored when the tab is changed.
         self.tab_node = {}
 
+        # if loading a node would consume a larger fraction of the
+        # available memory than self.memory_ratio_limit, a warning
+        # dialog will appear so that the user can either opt to load
+        # the node or cancel loading.
+        self.memory_ratio_limit = 0.3
+
         # Finally, initialise the signals for the view
         self.init_signals()
 
@@ -191,6 +200,20 @@ class HDF5Widget(QWidget):
         index = selected.indexes()[0]
 
         path = self.tree_model.itemFromIndex(index).data(Qt.UserRole)
+
+        if isinstance(self.hdf[path], h5py.Dataset):
+            memory_ratio = self.calculate_memory_ratio(path)
+            continue_loading = self.check_node_size(memory_ratio, path)
+            if not continue_loading:
+                # user opts not to load node
+                if not deselected.isEmpty():
+                    index = deselected.indexes()[0]
+                else:
+                    index = QModelIndex()
+                self.tree_view.selectionModel().blockSignals(True)
+                self.tree_view.setCurrentIndex(index)
+                self.tree_view.selectionModel().blockSignals(False)
+                return
 
         self.attrs_model.update_node(path)
         self.attrs_view.scrollToTop()
@@ -304,6 +327,99 @@ class HDF5Widget(QWidget):
         if isinstance(widget, ImageView):
             self.image_views.pop(id(widget))
         widget.deleteLater()
+
+
+    def calculate_memory_ratio(self, path):
+        """
+        Finds a critical dimension, dim_crit, in bytes
+        for the dataset selected and then calculates
+        and returns memory_ratio: the ratio of dim_crit
+        to the available memory on the sytem.
+
+        Parameters
+        ----------
+        path : STR
+            Path to a dataset within self.hdf.
+
+        Returns
+        -------
+        memory_ratio : FLOAT
+            The ratio of the critical dimension of the
+            dataset selected, in bytes, to the available
+            memory on the sytem.
+
+
+        """
+        node = self.hdf[path]
+
+        if node.ndim in [0, 1, 2]:
+            dim_crit = node.nbytes
+        elif node.ndim > 2 and node.shape[-1] in [3, 4]:
+            size = node.shape[-3] * node.shape[-2] * node.shape[-1]
+            dim_crit = node[tuple([0] * node.ndim)].nbytes * size
+        else:
+            size = node.shape[-2] * node.shape[-1]
+            dim_crit = node[tuple([0] * node.ndim)].nbytes * size
+
+        memory_ratio = dim_crit / psutil.virtual_memory().free
+
+        return memory_ratio
+
+
+    def check_node_size(self, memory_ratio, path):
+        """
+        If memory_ratio > self.memory_ratio_limit, a
+        QMessageBox.warning will appear notifying the
+        user what percentage of available memory will
+        be consumed by loading the node. The user can
+        opt to continue loading the node, or cancel
+        and return to the previous selection in the
+        tree.
+
+        Parameters
+        ----------
+        memory_ratio : FLOAT
+            The ratio of the critical dimension of the
+            dataset selected, in bytes, to the available
+            memory on the sytem.
+        path : STR
+            Path to a dataset within self.hdf.
+
+        Returns
+        -------
+        bool
+            returns True if memory_ratio <= self.memory_ratio_limit
+            if memory_ratio > self.memory_ratio_limit:
+                returns True if the user presses "Yes"
+                on the dialog, opting to continue
+                loading the node.
+                returns False if the user presses "No"
+                on the dialog, opting to cancel loading
+                the node and return to the previous
+                selection in the tree.
+
+        """
+        if memory_ratio > self.memory_ratio_limit:
+            msg = f"Loading {path} would consume {int(100*memory_ratio):d}%"
+            msg1 = " of the available memory."
+            msg2 = "\nContinue to load?"
+
+            button = QMessageBox.warning(
+                self,
+                "Memory Warning",
+                "".join([msg, msg1, msg2]),
+                buttons=QMessageBox.Yes | QMessageBox.No,
+                defaultButton=QMessageBox.No,
+            )
+
+            if button == QMessageBox.Yes:
+                return True
+
+            return False
+
+        return True
+
+
 
 
 class ImageView(QAbstractItemView):
