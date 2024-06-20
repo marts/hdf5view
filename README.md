@@ -1,26 +1,26 @@
 [![PyPI Version](https://img.shields.io/pypi/v/hdf5view.svg)](https://pypi.python.org/pypi/hdf5view/)
 [![Supported Python Versions](https://img.shields.io/pypi/pyversions/hdf5view.svg)](https://pypi.python.org/pypi/hdf5view/)
 
-# **hdf5view** <img src="./src/hdf5view/resources/images/hdf5view.ico" width="28" />  
+# **hdf5view** <img src="https://raw.githubusercontent.com/marts/hdf5view/main/src/hdf5view/resources/images/hdf5view.ico" width="28" />  
 
 **Simple Qt/Python based viewer for HDF5 files.**
 
 Features:
 - Image tab(s) showing rgb(a) or grayscale images of a selected node:
 
-![Image](./doc/screenshots/readme_imageview.png)
+![Image](https://raw.githubusercontent.com/marts/hdf5view/main/doc/screenshots/readme_imageview.png)
 
 <br>
 
 - Plot tab(s) showing columns of data in a node:
 
-![Image](./doc/screenshots/readme_plotview.png)
+![Image](https://raw.githubusercontent.com/marts/hdf5view/main/doc/screenshots/readme_plotview.png)
    
 <br>
 
 - Table tab giving a view of the data in the dataset selected:
 
-![Image](./doc/screenshots/readme_tableview.png)
+![Image](https://raw.githubusercontent.com/marts/hdf5view/main/doc/screenshots/readme_tableview.png)
 
 <br>
 
