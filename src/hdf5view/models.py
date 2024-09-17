@@ -11,7 +11,6 @@ from qtpy.QtCore import (
     QAbstractTableModel,
     QAbstractItemModel,
     QModelIndex,
-    QVariant,
     Qt,
 )
 
@@ -595,12 +594,14 @@ class ImageModel(QAbstractItemModel):
         """
         This function must be implemented when subclassing
         QAbstractItemModel. As the ImageView class does not need
-        this function, a default QVariant() is returned, as
-        recommended in the docs.
+        this function, an invalid QVariant is returned. The
+        constructor QVariant() should not be used in the future
+        so None can be returned instead, as
+        recommended in the docs: https://doc.qt.io/qtforpython-6/considerations.html#qvariant.
         """
         if index.isValid():
             if role in (Qt.DisplayRole, Qt.ToolTipRole):
-                return QVariant()
+                return None
 
 
     def set_dims(self, dims):
@@ -744,12 +745,14 @@ class PlotModel(QAbstractItemModel):
         """
         This function must be implemented when subclassing
         QAbstractItemModel. As the PlotView class does not need
-        this function, a default QVariant() is returned, as
-        recommended in the docs.
+        this function, an invalid QVariant is returned. The
+        constructor QVariant() should not be used in the future
+        so None can be returned instead, as
+        recommended in the docs: https://doc.qt.io/qtforpython-6/considerations.html#qvariant.
         """
         if index.isValid():
             if role in (Qt.DisplayRole, Qt.ToolTipRole):
-                return QVariant()
+                return None
 
 
     def set_dims(self, dims):
