@@ -110,8 +110,6 @@ class HDF5Widget(QWidget):
         self.tabs.setTabsClosable(True)
 
         self.tabs.addTab(self.data_view, 'Table')
-
-        self.tabs.tabBar().tabButton(0, QTabBar.RightSide).deleteLater()
         self.tabs.tabBar().setTabButton(0, QTabBar.RightSide, None)
         self.tabs.tabCloseRequested.connect(self.handle_close_tab)
 
